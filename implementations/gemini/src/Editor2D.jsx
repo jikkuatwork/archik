@@ -10,7 +10,7 @@ export default function Editor2D() {
     addNode, addWall, updateNode, 
     hoveredNodeId, setHoveredNodeId, 
     hoveredWallId, setHoveredWallId,
-    selectedWallId, setSelectedWallId,
+    selectedNodeIds, selectedWallIds, setSelection,
     setMode, drawingStartNode, setDrawingStartNode
   } = useStore();
   
@@ -18,6 +18,7 @@ export default function Editor2D() {
   const [dimensions, setDimensions] = useState({ w: 0, h: 0 });
   const [dragId, setDragId] = useState(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); // World coords
+  const [selectionStart, setSelectionStart] = useState(null); // World coords
   
   useEffect(() => {
     if (!containerRef.current) return;
@@ -81,11 +82,16 @@ export default function Editor2D() {
       if (hoveredNodeId) {
          setDragId(hoveredNodeId);
          setMode('DRAGGING');
-         setSelectedWallId(null);
+         if (!selectedNodeIds.includes(hoveredNodeId)) {
+            setSelection({ nodes: [hoveredNodeId], walls: [] });
+         }
       } else if (hoveredWallId) {
-         setSelectedWallId(hoveredWallId);
+         setSelection({ nodes: [], walls: [hoveredWallId] });
       } else {
-         setSelectedWallId(null);
+         // Start Selection Box
+         setSelectionStart({ x, y });
+         setMode('SELECTING_RECT');
+         setSelection({ nodes: [], walls: [] });
       }
     }
   };
@@ -97,6 +103,11 @@ export default function Editor2D() {
     if (dragId) {
       updateNode(dragId, x, y);
       if (hoveredNodeId !== dragId) setHoveredNodeId(dragId);
+      return;
+    }
+
+    if (mode === 'SELECTING_RECT') {
+      // Just updating mousePos is enough for render
       return;
     }
 
@@ -117,7 +128,7 @@ export default function Editor2D() {
     }
     setHoveredNodeId(foundNode);
 
-    // Hover check Wall (only if no node hovered)
+    // Hover check Wall
     if (!foundNode) {
       let foundWall = null;
       let minDst = Infinity;
@@ -126,8 +137,7 @@ export default function Editor2D() {
         const end = nodes.find(n => n.id === w.endNodeId);
         if (!start || !end) continue;
         
-        const d = distToSegment({x, y}, start, end); // World units
-        // Threshold: 10px / SCALE
+        const d = distToSegment({x, y}, start, end); 
         if (d < 10 / SCALE) {
           if (d < minDst) {
             minDst = d;
@@ -145,6 +155,32 @@ export default function Editor2D() {
     if (mode === 'DRAGGING') {
       setDragId(null);
       setMode('IDLE');
+    } else if (mode === 'SELECTING_RECT' && selectionStart) {
+      // Calculate Selection
+      const minX = Math.min(selectionStart.x, mousePos.x);
+      const maxX = Math.max(selectionStart.x, mousePos.x);
+      const minY = Math.min(selectionStart.y, mousePos.y);
+      const maxY = Math.max(selectionStart.y, mousePos.y);
+
+      const selNodes = nodes.filter(n => 
+        n.x >= minX && n.x <= maxX && n.y >= minY && n.y <= maxY
+      ).map(n => n.id);
+
+      // Select walls if both points are inside OR if it intersects?
+      // Let's do: If BOTH points inside, strictly enclosed.
+      const selWalls = walls.filter(w => {
+        const s = nodes.find(n => n.id === w.startNodeId);
+        const e = nodes.find(n => n.id === w.endNodeId);
+        if (!s || !e) return false;
+        return (
+          s.x >= minX && s.x <= maxX && s.y >= minY && s.y <= maxY &&
+          e.x >= minX && e.x <= maxX && e.y >= minY && e.y <= maxY
+        );
+      }).map(w => w.id);
+
+      setSelection({ nodes: selNodes, walls: selWalls });
+      setMode('IDLE');
+      setSelectionStart(null);
     }
   };
   
@@ -155,6 +191,27 @@ export default function Editor2D() {
       setMode('IDLE');
     }
   };
+
+  // Render Selection Rect
+  let selectionRect = null;
+  if (mode === 'SELECTING_RECT' && selectionStart) {
+    const s = toScreen(selectionStart.x, selectionStart.y);
+    const e = toScreen(mousePos.x, mousePos.y);
+    const x = Math.min(s.x, e.x);
+    const y = Math.min(s.y, e.y);
+    const w = Math.abs(s.x - e.x);
+    const h = Math.abs(s.y - e.y);
+    
+    selectionRect = (
+      <rect 
+        x={x} y={y} width={w} height={h} 
+        fill="rgba(59, 130, 246, 0.1)" 
+        stroke="#3b82f6" 
+        strokeWidth="1" 
+        strokeDasharray="4 4" 
+      />
+    );
+  }
 
   let previewLine = null;
   if (mode === 'DRAWING' && drawingStartNode) {
@@ -215,21 +272,19 @@ export default function Editor2D() {
           const e = toScreen(endNode.x, endNode.y);
 
           const isHovered = hoveredWallId === wall.id;
-          const isSelected = selectedWallId === wall.id;
+          const isSelected = selectedWallIds.includes(wall.id);
           
           const strokeColor = isSelected ? "#2563eb" : (isHovered ? "#64748b" : "#94a3b8");
           const opacity = isSelected || isHovered ? 1.0 : 0.5;
 
           // Openings
           const wallOpenings = openings.filter(o => o.wallId === wall.id).map(op => {
-             // Linear interp
              const dx = endNode.x - startNode.x;
              const dy = endNode.y - startNode.y;
              const len = Math.hypot(dx, dy);
              const cx = startNode.x + dx * op.dist;
              const cy = startNode.y + dy * op.dist;
              
-             // Half width vector
              const ux = dx / len;
              const uy = dy / len;
              
@@ -270,18 +325,21 @@ export default function Editor2D() {
         })}
         
         {previewLine}
+        {selectionRect}
 
         {/* Nodes */}
         {nodes.map(node => {
            const s = toScreen(node.x, node.y);
            const isStart = node.id === drawingStartNode;
+           const isSelected = selectedNodeIds.includes(node.id);
+           
            return (
              <circle 
                key={node.id} 
                cx={s.x} 
                cy={s.y} 
                r={isStart ? 8 : 6} 
-               fill={hoveredNodeId === node.id || dragId === node.id || isStart ? "#3b82f6" : "#1e293b"}
+               fill={hoveredNodeId === node.id || dragId === node.id || isStart || isSelected ? "#3b82f6" : "#1e293b"}
                stroke="white"
                strokeWidth="2"
                className="cursor-pointer transition-colors"

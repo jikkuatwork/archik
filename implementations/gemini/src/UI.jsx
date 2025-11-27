@@ -5,7 +5,11 @@ import { exportToJSON, importFromJSON, generateShareURL } from './persistence';
 import clsx from 'clsx';
 
 export default function UI() {
-  const { mode, setMode, reset, selectedWallId, addOpening, nodes, walls, openings, setAll } = useStore();
+  const { 
+    mode, setMode, reset, 
+    selectedWallIds, selectedNodeIds, deleteSelection, addOpening, 
+    nodes, walls, openings, setAll 
+  } = useStore();
   const [shareUrl, setShareUrl] = useState(null);
   const [shareError, setShareError] = useState(false);
 
@@ -15,7 +19,7 @@ export default function UI() {
     importFromJSON(file).then(data => {
       setAll(data);
     }).catch(err => alert("Failed to import: " + err.message));
-    e.target.value = ''; // Reset input
+    e.target.value = ''; 
   };
 
   const handleShare = () => {
@@ -31,12 +35,24 @@ export default function UI() {
   };
 
   const isTooLarge = !generateShareURL({ nodes, walls, openings });
+  
+  const hasSelection = selectedNodeIds.length > 0 || selectedWallIds.length > 0;
+  
+  const handleDelete = () => {
+    if (hasSelection) {
+      deleteSelection();
+    } else {
+      if (confirm("Are you sure you want to clear the entire plan?")) {
+        reset();
+      }
+    }
+  };
 
   return (
     <div className="absolute top-4 left-4 z-50 flex flex-col gap-2">
       <div className="bg-white/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-white/20 flex flex-col gap-2">
         <ToolButton 
-          active={mode === 'IDLE' || mode === 'DRAGGING'} 
+          active={mode === 'IDLE' || mode === 'DRAGGING' || mode === 'SELECTING_RECT'} 
           onClick={() => setMode('IDLE')}
           icon={<MousePointer2 size={20} />}
           label="Select"
@@ -49,15 +65,15 @@ export default function UI() {
         />
       </div>
       
-      {selectedWallId && (
+      {selectedWallIds.length === 1 && (
         <div className="bg-white/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-white/20 flex flex-col gap-2 animate-in fade-in slide-in-from-left-4 duration-200">
            <ToolButton 
-            onClick={() => addOpening(selectedWallId, 'window')}
+            onClick={() => addOpening(selectedWallIds[0], 'window')}
             icon={<AppWindow size={20} />}
             label="Add Window"
           />
           <ToolButton 
-            onClick={() => addOpening(selectedWallId, 'door')}
+            onClick={() => addOpening(selectedWallIds[0], 'door')}
             icon={<DoorOpen size={20} />}
             label="Add Door"
           />
@@ -73,7 +89,7 @@ export default function UI() {
         <label className="cursor-pointer">
            <input type="file" accept=".json" onChange={handleImport} className="hidden" />
            <ToolButton 
-            onClick={() => {}} // Dummy, click handled by label
+            onClick={() => {}} 
             icon={<Upload size={20} />}
             label="Import JSON"
             as="div"
@@ -98,9 +114,9 @@ export default function UI() {
         <div className="h-px bg-gray-200 my-1" />
 
          <ToolButton 
-          onClick={reset}
+          onClick={handleDelete}
           icon={<Trash2 size={20} />}
-          label="Reset"
+          label={hasSelection ? "Delete" : "Reset"}
           danger
         />
       </div>

@@ -18,12 +18,39 @@ export const useStore = create((set) => ({
   drawingStartNode: null,
   hoveredNodeId: null,
   hoveredWallId: null,
-  selectedWallId: null,
+  selectedNodeIds: [],
+  selectedWallIds: [],
 
   setMode: (mode) => set({ mode }),
   setHoveredNodeId: (id) => set({ hoveredNodeId: id }),
   setHoveredWallId: (id) => set({ hoveredWallId: id }),
-  setSelectedWallId: (id) => set({ selectedWallId: id }),
+  setSelection: ({ nodes, walls }) => set({ selectedNodeIds: nodes, selectedWallIds: walls }),
+  
+  deleteSelection: () => set((state) => {
+    const nodesToDelete = new Set(state.selectedNodeIds);
+    const wallsToDelete = new Set(state.selectedWallIds);
+    
+    // Also delete walls connected to deleted nodes
+    state.walls.forEach(w => {
+      if (nodesToDelete.has(w.startNodeId) || nodesToDelete.has(w.endNodeId)) {
+        wallsToDelete.add(w.id);
+      }
+    });
+
+    const newNodes = state.nodes.filter(n => !nodesToDelete.has(n.id));
+    const newWalls = state.walls.filter(w => !wallsToDelete.has(w.id));
+    const newOpenings = state.openings.filter(o => !wallsToDelete.has(o.wallId));
+
+    return {
+      nodes: newNodes,
+      walls: newWalls,
+      openings: newOpenings,
+      selectedNodeIds: [],
+      selectedWallIds: [],
+      hoveredNodeId: null,
+      hoveredWallId: null
+    };
+  }),
   
   addNode: (x, y) => {
     const id = crypto.randomUUID()
@@ -64,7 +91,8 @@ export const useStore = create((set) => ({
     walls: data.walls || [],
     openings: data.openings || [],
     mode: 'IDLE',
-    selectedWallId: null,
+    selectedNodeIds: [],
+    selectedWallIds: [],
     hoveredNodeId: null,
     hoveredWallId: null,
     drawingStartNode: null
@@ -78,6 +106,7 @@ export const useStore = create((set) => ({
     drawingStartNode: null,
     hoveredNodeId: null,
     hoveredWallId: null,
-    selectedWallId: null
+    selectedNodeIds: [],
+    selectedWallIds: []
   }),
 }))
