@@ -1,0 +1,83 @@
+import { create } from 'zustand'
+
+export const useStore = create((set) => ({
+  nodes: [
+    { id: 'n1', x: -2, y: -2 },
+    { id: 'n2', x: 2, y: -2 },
+    { id: 'n3', x: 2, y: 2 },
+    { id: 'n4', x: -2, y: 2 },
+  ],
+  walls: [
+    { id: 'w1', startNodeId: 'n1', endNodeId: 'n2', thickness: 0.2 },
+    { id: 'w2', startNodeId: 'n2', endNodeId: 'n3', thickness: 0.2 },
+    { id: 'w3', startNodeId: 'n3', endNodeId: 'n4', thickness: 0.2 },
+    { id: 'w4', startNodeId: 'n4', endNodeId: 'n1', thickness: 0.2 },
+  ],
+  openings: [], // { id, wallId, type: 'window'|'door', dist: 0.5 (normalized 0-1), width: 1.0, height: 1.5 }
+  mode: 'IDLE', // IDLE, DRAWING, DRAGGING
+  drawingStartNode: null,
+  hoveredNodeId: null,
+  hoveredWallId: null,
+  selectedWallId: null,
+
+  setMode: (mode) => set({ mode }),
+  setHoveredNodeId: (id) => set({ hoveredNodeId: id }),
+  setHoveredWallId: (id) => set({ hoveredWallId: id }),
+  setSelectedWallId: (id) => set({ selectedWallId: id }),
+  
+  addNode: (x, y) => {
+    const id = crypto.randomUUID()
+    set((state) => ({ nodes: [...state.nodes, { id, x, y }] }))
+    return id
+  },
+
+  addWall: (startNodeId, endNodeId) => {
+    const id = crypto.randomUUID()
+    set((state) => ({ walls: [...state.walls, { id, startNodeId, endNodeId, thickness: 0.2 }] }))
+    return id
+  },
+  
+  addOpening: (wallId, type) => {
+    const id = crypto.randomUUID()
+    set((state) => ({ 
+      openings: [...state.openings, { 
+        id, 
+        wallId, 
+        type, 
+        dist: 0.5, // Center by default
+        width: type === 'door' ? 1.0 : 1.5,
+        height: type === 'door' ? 2.2 : 1.2,
+        y: type === 'door' ? 0 : 0.9 // Sill height
+      }] 
+    }))
+    return id
+  },
+
+  updateNode: (id, x, y) => set((state) => ({
+    nodes: state.nodes.map(n => n.id === id ? { ...n, x, y } : n)
+  })),
+
+  setDrawingStartNode: (nodeId) => set({ drawingStartNode: nodeId }),
+
+  setAll: (data) => set({
+    nodes: data.nodes || [],
+    walls: data.walls || [],
+    openings: data.openings || [],
+    mode: 'IDLE',
+    selectedWallId: null,
+    hoveredNodeId: null,
+    hoveredWallId: null,
+    drawingStartNode: null
+  }),
+
+  reset: () => set({
+    nodes: [],
+    walls: [],
+    openings: [],
+    mode: 'IDLE',
+    drawingStartNode: null,
+    hoveredNodeId: null,
+    hoveredWallId: null,
+    selectedWallId: null
+  }),
+}))
