@@ -119,36 +119,153 @@ function ProceduralWall({ wall, isDark }) {
   const geometry = useMemo(() => {
     const corners = computeWallCorners(wall, nodes, walls);
     if (corners.length < 4) return null;
-
+    
+    // geometry.js returns: [StartRight, EndLeft, EndRight, StartLeft] 
+    // Wait, let's verify the "Fix" I made earlier in geometry.js
+    // It was: [Start+Right, End+Left, End+Right, Start+Left]
+    // So:
+    // 0: StartRight
+    // 1: EndLeft
+    // 2: EndRight
+    // 3: StartLeft
+    //
+    // Right Face runs from 0 (StartRight) to 2 (EndRight).
+    // Left Face runs from 3 (StartLeft) to 1 (EndLeft).
+    
+    const p0 = corners[0]; // StartRight
+    const p1 = corners[1]; // EndLeft
+    const p2 = corners[2]; // EndRight
+    const p3 = corners[3]; // StartLeft
+    
+    const startNode = nodes.find(n => n.id === wall.startNodeId);
+    const endNode = nodes.find(n => n.id === wall.endNodeId);
+    if (!startNode || !endNode) return null;
+    
+    const wallLen = Math.hypot(endNode.x - startNode.x, endNode.y - startNode.y);
+    
+    // Sort Openings
+    const myOpenings = openings
+      .filter(o => o.wallId === wall.id)
+      .sort((a, b) => a.dist - b.dist);
+      
+    // Define Segments (t ranges)
+    // We have "Solid" segments and "Hole" segments.
+    // Logic: Current T cursor.
+    
+    let t = 0;
+    const segments = []; // { t0, t1, type: 'solid' | 'hole', opening: op }
+    
+    myOpenings.forEach(op => {
+      const halfW = (op.width / 2) / wallLen;
+      const tStart = Math.max(0, op.dist - halfW);
+      const tEnd = Math.min(1, op.dist + halfW);
+      
+      // Solid segment before this opening
+      if (tStart > t) {
+        segments.push({ t0: t, t1: tStart, type: 'solid' });
+      }
+      
+      // Hole segment
+      segments.push({ t0: tStart, t1: tEnd, type: 'hole', opening: op });
+      
+      t = tEnd;
+    });
+    
+    // Final solid segment
+    if (t < 1) {
+      segments.push({ t0: t, t1: 1, type: 'solid' });
+    }
+    
+    // Build Geometry
     const vertices = [];
     const indices = [];
+    let vCount = 0;
     
-    // Bottom loop 0-3
-    corners.forEach(p => vertices.push(p.x, 0, -p.y)); 
-    // Top loop 4-7
-    corners.forEach(p => vertices.push(p.x, WALL_HEIGHT, -p.y)); 
-    
-    const pushFace = (a, b, c) => indices.push(a, b, c);
-    const pushQuad = (a, b, c, d) => {
-        pushFace(a, b, d);
-        pushFace(b, c, d);
+    const pushQuad = (v1, v2, v3, v4) => {
+       vertices.push(v1.x, v1.y, v1.z);
+       vertices.push(v2.x, v2.y, v2.z);
+       vertices.push(v3.x, v3.y, v3.z);
+       vertices.push(v4.x, v4.y, v4.z);
+       indices.push(vCount, vCount+1, vCount+2);
+       indices.push(vCount, vCount+2, vCount+3);
+       vCount += 4;
     };
     
-    pushQuad(7, 6, 5, 4); // Top
-    pushQuad(0, 1, 5, 4); // Right
-    pushQuad(1, 2, 6, 5); // End
-    pushQuad(2, 3, 7, 6); // Left
-    pushQuad(3, 0, 4, 7); // Start
-    pushQuad(3, 2, 1, 0); // Bottom
+    // Lerp helpers
+    const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x)*t, y: a.y + (b.y - a.y)*t });
+    
+    const addBlock = (t0, t1, yBottom, yTop) => {
+      // Interpolate 2D corners at t0 and t1
+      // Right Face: p0 -> p2
+      const r0 = lerp(p0, p2, t0);
+      const r1 = lerp(p0, p2, t1);
+      
+      // Left Face: p3 -> p1
+      const l0 = lerp(p3, p1, t0);
+      const l1 = lerp(p3, p1, t1);
+      
+      // 3D Vertices (Y is up, Z is -y2d)
+      // We need 8 corners for the block:
+      // Bottom Ring:
+      // B_R0 (at t0, Right)
+      // B_L0 (at t0, Left)
+      // B_L1 (at t1, Left)
+      // B_R1 (at t1, Right)
+      
+      const to3D = (p, h) => ({ x: p.x, y: h, z: -p.y });
+      
+      const br0 = to3D(r0, yBottom);
+      const bl0 = to3D(l0, yBottom);
+      const bl1 = to3D(l1, yBottom);
+      const br1 = to3D(r1, yBottom);
+      
+      const tr0 = to3D(r0, yTop);
+      const tl0 = to3D(l0, yTop);
+      const tl1 = to3D(l1, yTop);
+      const tr1 = to3D(r1, yTop);
+      
+      // Faces
+      // Top
+      pushQuad(tl0, tl1, tr1, tr0);
+      // Bottom
+      pushQuad(br0, br1, bl1, bl0); // winding? CW to point down?
+      // Right Side (r0 -> r1)
+      pushQuad(br0, br1, tr1, tr0);
+      // Left Side (l1 -> l0) -- Note direction for CCW normal
+      pushQuad(bl1, bl0, tl0, tl1); // Wait, bl1->bl0 is right to left.
+      // Start Cap (at t0) - Normal pointing back?
+      // l0 -> r0
+      pushQuad(bl0, br0, tr0, tl0); 
+      // End Cap (at t1) - Normal pointing forward?
+      // r1 -> l1
+      pushQuad(br1, bl1, tl1, tr1);
+    };
+    
+    segments.forEach(seg => {
+      if (seg.type === 'solid') {
+        addBlock(seg.t0, seg.t1, 0, WALL_HEIGHT);
+      } else {
+        const op = seg.opening;
+        // Sill
+        if (op.y > 0) {
+          addBlock(seg.t0, seg.t1, 0, op.y);
+        }
+        // Header
+        if (op.y + op.height < WALL_HEIGHT) {
+          addBlock(seg.t0, seg.t1, op.y + op.height, WALL_HEIGHT);
+        }
+      }
+    });
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geo.setIndex(indices);
     geo.computeVertexNormals();
     return geo;
-  }, [wall, nodes, walls]);
+  }, [wall, nodes, walls, openings]);
 
   const wallOpenings = useMemo(() => {
+     // ... same as before
      return openings.filter(o => o.wallId === wall.id).map(op => {
         const start = nodes.find(n => n.id === wall.startNodeId);
         const end = nodes.find(n => n.id === wall.endNodeId);
