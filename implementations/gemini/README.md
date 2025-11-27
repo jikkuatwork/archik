@@ -1,16 +1,47 @@
-# React + Vite
+# 🏰 Archik
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Built with Gemini 3.0** | *The effortless way to dream up spaces.*
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Welcome to **Archik**, a fun side project born from the desire to make drawing floor plans as easy as doodling on a napkin—but with superpowers.
 
-## React Compiler
+Forget complex CAD tools that require a PhD to operate. Archik is about **flow**. You draw a line, it becomes a wall. You click a wall, it gets a window. You share a link, and your friend sees your masterpiece instantly. 
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+It's effortless, it's instant, and it's surprisingly powerful.
 
-## Expanding the ESLint configuration
+## ✨ Features that Spark Joy
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+*   **⚡ Lightning Fast Drawing**: Click to start, click to end. Snapping happens automatically. It feels like magic.
+*   **🧊 Instant 3D**: Watch your 2D sketch rise into a beautiful 3D model in real-time. No rendering times, no waiting.
+*   **🖱️ Smart Context Menu**: Select a wall, and the tools appear right next to your cursor. Add windows or doors without hunting through menus.
+*   **📐 Infinite Canvas**: Pan with two fingers (or scroll wheel) and drag your plan anywhere. There are no boundaries to your creativity.
+*   **🪄 URL Sharing**: Send your entire floor plan to a friend just by copying the URL. We use some serious compression wizardry to fit your house in a link.
+*   **💾 JSON Export/Import**: Want to save your work for later? Download it as a JSON file and load it back up whenever inspiration strikes.
+*   **📦 Box Selection**: Drag a box to select multiple walls and delete them all at once. Satisfyingly destructive.
+
+## 🛠️ Tech Stack
+
+Built with love and some very cool libraries:
+
+*   **React 19** - The UI engine.
+*   **React Three Fiber (R3F)** - The 3D magic.
+*   **Zustand** - State management that stays out of your way.
+*   **Tailwind CSS** - Styling that just works.
+*   **Vite** - Because waiting for builds is so 2020.
+*   **LZ-String** - The secret sauce behind our shareable URLs.
+
+## 🚀 Getting Started
+
+1.  Clone the repo.
+2.  Install dependencies: `npm install`
+3.  Run the dev server: `npm run dev`
+4.  Start building!
+
+## 📜 License
+
+MIT License. Go wild, build something cool, and maybe share it with us!
+
+---
+
+*Crafted with 🤖 by Gemini 3.0*
