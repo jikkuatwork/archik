@@ -7,6 +7,7 @@ import { useStore } from './store';
 
 export default function App() {
   const setAll = useStore(state => state.setAll);
+  const theme = useStore(state => state.theme);
 
   useEffect(() => {
     const data = loadFromURL();
@@ -18,16 +19,18 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex w-screen h-screen overflow-hidden bg-gray-50">
-      {/* Left Pane: 2D Editor */}
-      <div className="w-1/2 h-full relative border-r border-gray-200 shadow-xl z-10">
-        <Editor2D />
-        <UI />
-      </div>
+    <div className={theme}>
+      <div className="flex w-screen h-screen overflow-hidden bg-gray-50 dark:bg-gray-900 text-slate-900 dark:text-slate-100">
+        {/* Left Pane: 2D Editor */}
+        <div className="w-1/2 h-full relative border-r border-gray-200 dark:border-gray-800 shadow-xl z-10">
+          <Editor2D />
+          <UI />
+        </div>
 
-      {/* Right Pane: 3D Viewport */}
-      <div className="w-1/2 h-full relative">
-        <Viewport3D />
+        {/* Right Pane: 3D Viewport */}
+        <div className="w-1/2 h-full relative">
+          <Viewport3D />
+        </div>
       </div>
     </div>
   );

@@ -12,7 +12,7 @@ export default function Editor2D() {
     hoveredWallId, setHoveredWallId,
     selectedNodeIds, selectedWallIds, setSelection,
     setMode, drawingStartNode, setDrawingStartNode,
-    setContextMenuData
+    setContextMenuData, theme
   } = useStore();
   
   const containerRef = useRef(null);
@@ -22,6 +22,14 @@ export default function Editor2D() {
   const [selectionStart, setSelectionStart] = useState(null); // World coords
   const [pan, setPan] = useState({ x: 0, y: 0 }); // Screen pixels
   
+  // Theme Colors
+  const isDark = theme === 'dark';
+  const gridColor = isDark ? "#334155" : "#e5e5e5"; // Slate-700 vs Gray-200
+  const wallColorDefault = isDark ? "#94a3b8" : "#94a3b8"; // Keep same?
+  const wallColorHover = isDark ? "#cbd5e1" : "#64748b";
+  const nodeColorDefault = isDark ? "#e2e8f0" : "#1e293b";
+  const nodeStroke = isDark ? "#0f172a" : "white";
+
   useEffect(() => {
     if (!containerRef.current) return;
     
@@ -264,7 +272,7 @@ export default function Editor2D() {
   }
 
   return (
-    <div ref={containerRef} className="w-full h-full relative overflow-hidden bg-white select-none">
+    <div ref={containerRef} className="w-full h-full relative overflow-hidden bg-white dark:bg-gray-950 select-none">
       <svg 
         className="w-full h-full pointer-events-auto block"
         onPointerDown={handlePointerDown}
@@ -275,7 +283,7 @@ export default function Editor2D() {
       >
         <defs>
           <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse" patternTransform={`translate(${pan.x},${pan.y})`}>
-             <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#e5e5e5" strokeWidth="1"/>
+             <path d="M 50 0 L 0 0 0 50" fill="none" stroke={gridColor} strokeWidth="1"/>
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" />
@@ -292,7 +300,7 @@ export default function Editor2D() {
           const isHovered = hoveredWallId === wall.id;
           const isSelected = selectedWallIds.includes(wall.id);
           
-          const strokeColor = isSelected ? "#2563eb" : (isHovered ? "#64748b" : "#94a3b8");
+          const strokeColor = isSelected ? "#3b82f6" : (isHovered ? wallColorHover : wallColorDefault);
           const opacity = isSelected || isHovered ? 1.0 : 0.5;
 
           // Openings
@@ -320,7 +328,7 @@ export default function Editor2D() {
                  key={op.id}
                  x1={p1.x} y1={p1.y}
                  x2={p2.x} y2={p2.y}
-                 stroke="white"
+                 stroke={isDark ? "#0f172a" : "white"}
                  strokeWidth={(wall.thickness * SCALE) - 2}
                  strokeLinecap="butt"
                />
@@ -357,8 +365,8 @@ export default function Editor2D() {
                cx={s.x} 
                cy={s.y} 
                r={isStart ? 8 : 6} 
-               fill={hoveredNodeId === node.id || dragId === node.id || isStart || isSelected ? "#3b82f6" : "#1e293b"}
-               stroke="white"
+               fill={hoveredNodeId === node.id || dragId === node.id || isStart || isSelected ? "#3b82f6" : nodeColorDefault}
+               stroke={nodeStroke}
                strokeWidth="2"
                className="cursor-pointer transition-colors"
              />

@@ -7,33 +7,119 @@ import { computeWallCorners } from './geometry';
 
 const WALL_HEIGHT = 2.5;
 
-function ProceduralWall({ wall }) {
+function Opening({ data, isDark }) {
+  const { type, size, isOpen } = data;
+  const [w, h, d] = size;
+  const frameThick = 0.05;
+  const frameDepth = d + 0.02;
+  const glassThick = 0.02;
+
+  const frameColor = isDark ? "#4b5563" : "#374151";
+  const glassColor = "#bae6fd";
+  const doorColor = "#92400e"; // Wood
+
+  if (type === 'window') {
+    return (
+      <group position={data.pos} rotation={data.rot}>
+        {/* Frame Top/Bottom */}
+        <mesh position={[0, h/2 - frameThick/2, 0]} castShadow receiveShadow>
+           <boxGeometry args={[w, frameThick, frameDepth]} />
+           <meshStandardMaterial color={frameColor} />
+        </mesh>
+        <mesh position={[0, -h/2 + frameThick/2, 0]} castShadow receiveShadow>
+           <boxGeometry args={[w, frameThick, frameDepth]} />
+           <meshStandardMaterial color={frameColor} />
+        </mesh>
+        {/* Frame Left/Right */}
+        <mesh position={[-w/2 + frameThick/2, 0, 0]} castShadow receiveShadow>
+           <boxGeometry args={[frameThick, h - 2*frameThick, frameDepth]} />
+           <meshStandardMaterial color={frameColor} />
+        </mesh>
+        <mesh position={[w/2 - frameThick/2, 0, 0]} castShadow receiveShadow>
+           <boxGeometry args={[frameThick, h - 2*frameThick, frameDepth]} />
+           <meshStandardMaterial color={frameColor} />
+        </mesh>
+
+        {/* Sash (Rotating Part) */}
+        {/* Pivot at left side: x = -w/2 + frameThick */}
+        <group position={[-w/2 + frameThick, 0, 0]} rotation={[0, isOpen ? Math.PI / 3 : 0, 0]}>
+          <group position={[w/2 - frameThick, 0, 0]}> {/* Center sash back to local origin */}
+             {/* Sash Frame and Glass */}
+             <mesh castShadow receiveShadow>
+               <boxGeometry args={[w - 2*frameThick, h - 2*frameThick, glassThick]} />
+               <meshStandardMaterial 
+                 color={glassColor} 
+                 transparent 
+                 opacity={0.3} 
+                 roughness={0.1}
+                 metalness={0.1}
+               />
+             </mesh>
+             {/* Sash Border */}
+             <mesh position={[0, (h - 2*frameThick)/2 - 0.02, 0]} castShadow receiveShadow>
+                <boxGeometry args={[w - 2*frameThick, 0.04, frameDepth - 0.05]} />
+                <meshStandardMaterial color={frameColor} />
+             </mesh>
+             <mesh position={[0, -(h - 2*frameThick)/2 + 0.02, 0]} castShadow receiveShadow>
+                <boxGeometry args={[w - 2*frameThick, 0.04, frameDepth - 0.05]} />
+                <meshStandardMaterial color={frameColor} />
+             </mesh>
+             <mesh position={[-(w - 2*frameThick)/2 + 0.02, 0, 0]} castShadow receiveShadow>
+                <boxGeometry args={[0.04, h - 2*frameThick, frameDepth - 0.05]} />
+                <meshStandardMaterial color={frameColor} />
+             </mesh>
+             <mesh position={[(w - 2*frameThick)/2 - 0.02, 0, 0]} castShadow receiveShadow>
+                <boxGeometry args={[0.04, h - 2*frameThick, frameDepth - 0.05]} />
+                <meshStandardMaterial color={frameColor} />
+             </mesh>
+          </group>
+        </group>
+      </group>
+    );
+  } else {
+    // Door
+    return (
+      <group position={data.pos} rotation={data.rot}>
+         {/* Frame Top */}
+        <mesh position={[0, h/2 - frameThick/2, 0]} castShadow receiveShadow>
+           <boxGeometry args={[w, frameThick, frameDepth]} />
+           <meshStandardMaterial color={frameColor} />
+        </mesh>
+        {/* Frame Left/Right */}
+        <mesh position={[-w/2 + frameThick/2, 0, 0]} castShadow receiveShadow>
+           <boxGeometry args={[frameThick, h, frameDepth]} />
+           <meshStandardMaterial color={frameColor} />
+        </mesh>
+        <mesh position={[w/2 - frameThick/2, 0, 0]} castShadow receiveShadow>
+           <boxGeometry args={[frameThick, h, frameDepth]} />
+           <meshStandardMaterial color={frameColor} />
+        </mesh>
+
+        {/* Door Panel */}
+        {/* Pivot at left: -w/2 + frameThick */}
+        <group position={[-w/2 + frameThick, 0, 0]} rotation={[0, isOpen ? Math.PI / 2 : 0, 0]}>
+           <mesh position={[(w - 2*frameThick)/2, 0, 0]} castShadow receiveShadow>
+             <boxGeometry args={[w - 2*frameThick, h - frameThick, 0.05]} />
+             <meshStandardMaterial color={doorColor} />
+           </mesh>
+           {/* Handle */}
+           <mesh position={[(w - 2*frameThick) - 0.1, 0, 0.04]} castShadow receiveShadow>
+             <sphereGeometry args={[0.04]} />
+             <meshStandardMaterial color="gold" metalness={0.8} roughness={0.2} />
+           </mesh>
+        </group>
+      </group>
+    );
+  }
+}
+
+function ProceduralWall({ wall, isDark }) {
   const { nodes, walls, openings } = useStore();
   
   const geometry = useMemo(() => {
     const corners = computeWallCorners(wall, nodes, walls);
     if (corners.length < 4) return null;
 
-    // Convert 2D (x,y) to 3D (x, 0, -y)
-    // corners order: StartRight, EndRight, EndLeft, StartLeft (After fix: StartRight, EndLeft, EndRight, StartLeft - Wait, checking fix again)
-    // The fix in geometry.js was: Start+Right, End+Left, End+Right, Start+Left.
-    // Let's assume standard quad:
-    // 0: Start Right
-    // 1: End Left (which is "Right" side of wall physically? No, End.Left is physically on the same side as Start.Right? No.)
-    
-    // Let's re-verify the "Fix" logic mentally.
-    // Start Node. Direction Out is D1. Right is R1 (D1 rotated -90).
-    // End Node. Direction Out is D2 (approx -D1). Left is L2 (D2 rotated +90).
-    // If D2 = -D1, then L2 = (-D1 rot +90) = -(D1 rot +90) = - (Left) = Right.
-    // So End.Left is indeed on the same side as Start.Right.
-    // So the quad should be 0->1->2->3?
-    // 0: Start+Right
-    // 1: End+Left
-    // 2: End+Right
-    // 3: Start+Left
-    // This forms a loop: StartRight -> EndLeft (Same side) -> EndRight (Other side) -> StartLeft (Other side) -> Close.
-    // Yes, this is correct for a loop.
-    
     const vertices = [];
     const indices = [];
     
@@ -48,23 +134,12 @@ function ProceduralWall({ wall }) {
         pushFace(b, c, d);
     };
     
-    // Top Face (CCW)
-    pushQuad(7, 6, 5, 4); 
-    
-    // Side 1: 0->1 (Bottom Right Side). Top is 4->5.
-    pushQuad(0, 1, 5, 4);
-    
-    // Side 2: 1->2 (End Face). Top is 5->6.
-    pushQuad(1, 2, 6, 5);
-    
-    // Side 3: 2->3 (Bottom Left Side). Top is 6->7.
-    pushQuad(2, 3, 7, 6);
-    
-    // Side 4: 3->0 (Start Face). Top is 7->4.
-    pushQuad(3, 0, 4, 7);
-    
-    // Bottom Face (CW)
-    pushQuad(3, 2, 1, 0); 
+    pushQuad(7, 6, 5, 4); // Top
+    pushQuad(0, 1, 5, 4); // Right
+    pushQuad(1, 2, 6, 5); // End
+    pushQuad(2, 3, 7, 6); // Left
+    pushQuad(3, 0, 4, 7); // Start
+    pushQuad(3, 2, 1, 0); // Bottom
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -79,24 +154,20 @@ function ProceduralWall({ wall }) {
         const end = nodes.find(n => n.id === wall.endNodeId);
         if (!start || !end) return null;
         
-        // Position
         const dx = end.x - start.x;
-        const dy = -(end.y - start.y); // In 3D Z
-        // atan2(x, z) gives angle from Z+ axis.
-        // Wall along X+ (dx=1, dy=0) gives PI/2. We want 0 (align box with X).
-        // Wall along Z+ (dx=0, dy=1) gives 0. We want PI/2 (align box with Z).
-        // So we need: angle - PI/2.
+        const dy = -(end.y - start.y); 
         const angle = Math.atan2(dx, dy); 
         
         const cx = start.x + (end.x - start.x) * op.dist;
-        const cy = -start.y + (-end.y - (-start.y)) * op.dist; // Z coord
+        const cy = -start.y + (-end.y - (-start.y)) * op.dist; 
         
         return {
            id: op.id,
            pos: [cx, op.y + op.height/2, cy],
            rot: [0, angle - Math.PI/2, 0],
-           size: [op.width, op.height, wall.thickness + 0.04], // Thicker than wall
-           type: op.type
+           size: [op.width, op.height, wall.thickness + 0.04],
+           type: op.type,
+           isOpen: op.isOpen
         };
      });
   }, [wall, nodes, openings]);
@@ -106,37 +177,27 @@ function ProceduralWall({ wall }) {
   return (
     <group>
       <mesh geometry={geometry} castShadow receiveShadow>
-        <meshStandardMaterial color="#ffffff" roughness={0.8} />
+        <meshStandardMaterial color={isDark ? "#e5e7eb" : "#ffffff"} roughness={0.8} />
       </mesh>
-      {wallOpenings.map((op, i) => op && (
-         <mesh key={op.id} position={op.pos} rotation={op.rot} castShadow receiveShadow>
-            <boxGeometry args={op.size} />
-            <meshStandardMaterial color={op.type === 'window' ? "#a3e635" : "#78350f"} transparent opacity={0.8} />
-         </mesh>
+      {wallOpenings.map((op) => op && (
+         <Opening key={op.id} data={op} isDark={isDark} />
       ))}
     </group>
   );
 }
 
-function Floor() {
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-      <planeGeometry args={[100, 100]} />
-      <meshStandardMaterial color="#f5f5f7" />
-    </mesh>
-  );
-}
-
 export default function Viewport3D() {
   const walls = useStore(state => state.walls);
+  const theme = useStore(state => state.theme);
+  const isDark = theme === 'dark';
 
   return (
-    <div className="w-full h-full relative z-0 bg-gray-100">
+    <div className="w-full h-full relative z-0">
       <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 10, 10], fov: 45 }}>
         <SoftShadows />
         <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2.1} />
         
-        <ambientLight intensity={0.6} />
+        <ambientLight intensity={isDark ? 0.4 : 0.6} />
         <directionalLight 
           position={[10, 20, 10]} 
           intensity={1.2} 
@@ -146,15 +207,24 @@ export default function Viewport3D() {
           <orthographicCamera attach="shadow-camera" args={[-20, 20, 20, -20]} />
         </directionalLight>
 
-        <Environment preset="city" />
+        <Environment preset={isDark ? "apartment" : "city"} />
 
-        <Floor />
+        <Floor isDark={isDark} />
         
         {walls.map(wall => (
-          <ProceduralWall key={wall.id} wall={wall} />
+          <ProceduralWall key={wall.id} wall={wall} isDark={isDark} />
         ))}
         
       </Canvas>
     </div>
+  );
+}
+
+function Floor({ isDark }) {
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+      <planeGeometry args={[100, 100]} />
+      <meshStandardMaterial color={isDark ? "#111827" : "#f5f5f7"} />
+    </mesh>
   );
 }

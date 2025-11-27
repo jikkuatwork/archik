@@ -21,12 +21,14 @@ export const useStore = create((set) => ({
   selectedNodeIds: [],
   selectedWallIds: [],
   contextMenuData: null, // { x, y, worldX, worldY }
+  theme: typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
 
   setMode: (mode) => set({ mode }),
   setHoveredNodeId: (id) => set({ hoveredNodeId: id }),
   setHoveredWallId: (id) => set({ hoveredWallId: id }),
   setSelection: ({ nodes, walls }) => set({ selectedNodeIds: nodes, selectedWallIds: walls }),
   setContextMenuData: (data) => set({ contextMenuData: data }),
+  toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
   
   deleteSelection: () => set((state) => {
     const nodesToDelete = new Set(state.selectedNodeIds);
@@ -77,7 +79,8 @@ export const useStore = create((set) => ({
         dist: 0.5, // Center by default
         width: type === 'door' ? 1.0 : 1.5,
         height: type === 'door' ? 2.2 : 1.2,
-        y: type === 'door' ? 0 : 0.9 // Sill height
+        y: type === 'door' ? 0 : 0.9, // Sill height
+        isOpen: false
       }] 
     }))
     return id
@@ -101,12 +104,17 @@ export const useStore = create((set) => ({
         dist: 0.5,
         width: type === 'door' ? 1.0 : 1.5,
         height: type === 'door' ? 2.2 : 1.2,
-        y: type === 'door' ? 0 : 0.9
+        y: type === 'door' ? 0 : 0.9,
+        isOpen: false
       };
       
       return { openings: [...cleanOpenings, newOpening] };
     });
   },
+
+  toggleOpeningStatus: (wallId) => set((state) => ({
+    openings: state.openings.map(o => o.wallId === wallId ? { ...o, isOpen: !o.isOpen } : o)
+  })),
 
   updateNode: (id, x, y) => set((state) => ({
     nodes: state.nodes.map(n => n.id === id ? { ...n, x, y } : n)
