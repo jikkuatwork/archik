@@ -1,9 +1,3 @@
-Here is a comprehensive, strictly formatted prompt designed to be pasted directly into an LLM coding agent (like Cursor, GPT-4, or Claude 3.5 Sonnet).
-
-It is formatted to ~80 characters width for readability and creates a unified architecture plan.
-
-***
-
 # SYSTEM DIRECTIVE: ARCHITECTURAL EDITOR (REACT + R3F)
 
 **ROLE**: Senior Creative Technologist / Graphics Engineer
