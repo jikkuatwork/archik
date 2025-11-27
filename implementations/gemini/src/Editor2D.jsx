@@ -11,7 +11,8 @@ export default function Editor2D() {
     hoveredNodeId, setHoveredNodeId, 
     hoveredWallId, setHoveredWallId,
     selectedNodeIds, selectedWallIds, setSelection,
-    setMode, drawingStartNode, setDrawingStartNode
+    setMode, drawingStartNode, setDrawingStartNode,
+    setContextMenuData
   } = useStore();
   
   const containerRef = useRef(null);
@@ -19,6 +20,7 @@ export default function Editor2D() {
   const [dragId, setDragId] = useState(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); // World coords
   const [selectionStart, setSelectionStart] = useState(null); // World coords
+  const [pan, setPan] = useState({ x: 0, y: 0 }); // Screen pixels
   
   useEffect(() => {
     if (!containerRef.current) return;
@@ -37,19 +39,24 @@ export default function Editor2D() {
   }, []);
 
   const toScreen = (x, y) => ({
-    x: dimensions.w / 2 + x * SCALE,
-    y: dimensions.h / 2 - y * SCALE
+    x: dimensions.w / 2 + x * SCALE + pan.x,
+    y: dimensions.h / 2 - y * SCALE + pan.y
   });
   
   const toWorld = (clientX, clientY) => {
     if (!containerRef.current) return { x: 0, y: 0 };
     const rect = containerRef.current.getBoundingClientRect();
-    const sx = clientX - rect.left;
-    const sy = clientY - rect.top;
+    const sx = clientX - rect.left - pan.x;
+    const sy = clientY - rect.top - pan.y;
     return {
       x: (sx - dimensions.w / 2) / SCALE,
       y: -(sy - dimensions.h / 2) / SCALE
     };
+  };
+
+  const handleWheel = (e) => {
+    e.preventDefault();
+    setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
   };
 
   const handlePointerDown = (e) => {
@@ -82,16 +89,19 @@ export default function Editor2D() {
       if (hoveredNodeId) {
          setDragId(hoveredNodeId);
          setMode('DRAGGING');
+         setContextMenuData(null); // Clear menu when interacting
          if (!selectedNodeIds.includes(hoveredNodeId)) {
             setSelection({ nodes: [hoveredNodeId], walls: [] });
          }
       } else if (hoveredWallId) {
          setSelection({ nodes: [], walls: [hoveredWallId] });
+         setContextMenuData({ x: e.clientX, y: e.clientY, worldX: x, worldY: y });
       } else {
          // Start Selection Box
          setSelectionStart({ x, y });
          setMode('SELECTING_RECT');
          setSelection({ nodes: [], walls: [] });
+         setContextMenuData(null);
       }
     }
   };
@@ -103,6 +113,8 @@ export default function Editor2D() {
     if (dragId) {
       updateNode(dragId, x, y);
       if (hoveredNodeId !== dragId) setHoveredNodeId(dragId);
+      // Ensure menu is gone
+      setContextMenuData(null);
       return;
     }
 
@@ -179,6 +191,11 @@ export default function Editor2D() {
       }).map(w => w.id);
 
       setSelection({ nodes: selNodes, walls: selWalls });
+      if (selWalls.length > 0) {
+        setContextMenuData({ x: e.clientX, y: e.clientY, worldX: mousePos.x, worldY: mousePos.y });
+      } else {
+        setContextMenuData(null);
+      }
       setMode('IDLE');
       setSelectionStart(null);
     }
@@ -254,9 +271,10 @@ export default function Editor2D() {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onContextMenu={handleContextMenu}
+        onWheel={handleWheel}
       >
         <defs>
-          <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+          <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse" patternTransform={`translate(${pan.x},${pan.y})`}>
              <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#e5e5e5" strokeWidth="1"/>
           </pattern>
         </defs>

@@ -20,11 +20,13 @@ export const useStore = create((set) => ({
   hoveredWallId: null,
   selectedNodeIds: [],
   selectedWallIds: [],
+  contextMenuData: null, // { x, y, worldX, worldY }
 
   setMode: (mode) => set({ mode }),
   setHoveredNodeId: (id) => set({ hoveredNodeId: id }),
   setHoveredWallId: (id) => set({ hoveredWallId: id }),
   setSelection: ({ nodes, walls }) => set({ selectedNodeIds: nodes, selectedWallIds: walls }),
+  setContextMenuData: (data) => set({ contextMenuData: data }),
   
   deleteSelection: () => set((state) => {
     const nodesToDelete = new Set(state.selectedNodeIds);
@@ -48,7 +50,8 @@ export const useStore = create((set) => ({
       selectedNodeIds: [],
       selectedWallIds: [],
       hoveredNodeId: null,
-      hoveredWallId: null
+      hoveredWallId: null,
+      contextMenuData: null
     };
   }),
   
@@ -80,6 +83,31 @@ export const useStore = create((set) => ({
     return id
   },
 
+  setWallOpening: (wallId, type) => {
+    set((state) => {
+      // Remove existing openings for this wall
+      const cleanOpenings = state.openings.filter(o => o.wallId !== wallId);
+      
+      if (!type) {
+        return { openings: cleanOpenings };
+      }
+      
+      // Add new one
+      const id = crypto.randomUUID();
+      const newOpening = {
+        id,
+        wallId,
+        type,
+        dist: 0.5,
+        width: type === 'door' ? 1.0 : 1.5,
+        height: type === 'door' ? 2.2 : 1.2,
+        y: type === 'door' ? 0 : 0.9
+      };
+      
+      return { openings: [...cleanOpenings, newOpening] };
+    });
+  },
+
   updateNode: (id, x, y) => set((state) => ({
     nodes: state.nodes.map(n => n.id === id ? { ...n, x, y } : n)
   })),
@@ -95,7 +123,8 @@ export const useStore = create((set) => ({
     selectedWallIds: [],
     hoveredNodeId: null,
     hoveredWallId: null,
-    drawingStartNode: null
+    drawingStartNode: null,
+    contextMenuData: null
   }),
 
   reset: () => set({
@@ -107,6 +136,7 @@ export const useStore = create((set) => ({
     hoveredNodeId: null,
     hoveredWallId: null,
     selectedNodeIds: [],
-    selectedWallIds: []
+    selectedWallIds: [],
+    contextMenuData: null
   }),
 }))
