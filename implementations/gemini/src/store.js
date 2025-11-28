@@ -80,7 +80,8 @@ export const useStore = create((set) => ({
         width: type === 'door' ? 1.0 : 1.5,
         height: type === 'door' ? 2.2 : 1.2,
         y: type === 'door' ? 0 : 0.9, // Sill height
-        isOpen: false
+        isOpen: false,
+        isFlipped: false
       }] 
     }))
     return id
@@ -105,7 +106,8 @@ export const useStore = create((set) => ({
         width: type === 'door' ? 1.0 : 1.5,
         height: type === 'door' ? 2.2 : 1.2,
         y: type === 'door' ? 0 : 0.9,
-        isOpen: false
+        isOpen: false,
+        isFlipped: false
       };
       
       return { openings: [...cleanOpenings, newOpening] };
@@ -114,6 +116,10 @@ export const useStore = create((set) => ({
 
   toggleOpeningStatus: (wallId) => set((state) => ({
     openings: state.openings.map(o => o.wallId === wallId ? { ...o, isOpen: !o.isOpen } : o)
+  })),
+
+  flipOpening: (wallId) => set((state) => ({
+    openings: state.openings.map(o => o.wallId === wallId ? { ...o, isFlipped: !o.isFlipped } : o)
   })),
 
   updateNode: (id, x, y) => set((state) => ({

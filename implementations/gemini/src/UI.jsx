@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useStore } from './store';
-import { PenTool, MousePointer2, Trash2, AppWindow, DoorOpen, Download, Upload, Share2, Sun, Moon, Lock, LockOpen } from 'lucide-react';
+import { PenTool, MousePointer2, Trash2, AppWindow, DoorOpen, Download, Upload, Share2, Sun, Moon, Lock, LockOpen, Repeat } from 'lucide-react';
 import { exportToJSON, importFromJSON, generateShareURL } from './persistence';
 import clsx from 'clsx';
 
 export default function UI() {
   const { 
     mode, setMode, reset, 
-    selectedWallIds, selectedNodeIds, deleteSelection, addOpening, setWallOpening, toggleOpeningStatus,
+    selectedWallIds, selectedNodeIds, deleteSelection, addOpening, setWallOpening, toggleOpeningStatus, flipOpening,
     nodes, walls, openings, setAll,
     contextMenuData, theme, toggleTheme
   } = useStore();
@@ -159,6 +159,12 @@ export default function UI() {
                 label={isOpen ? "Close" : "Open"}
                 className="w-full justify-start text-sm"
                 active={isOpen}
+              />
+              <ToolButton 
+                onClick={() => flipOpening(selectedWallIds[0])}
+                icon={<Repeat size={16} />}
+                label="Flip Dir"
+                className="w-full justify-start text-sm"
               />
             </>
           )}

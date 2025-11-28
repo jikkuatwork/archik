@@ -8,7 +8,7 @@ import { computeWallCorners } from './geometry';
 const WALL_HEIGHT = 2.5;
 
 function Opening({ data, isDark }) {
-  const { type, size, isOpen } = data;
+  const { type, size, isOpen, isFlipped } = data;
   const [w, h, d] = size;
   const frameThick = 0.05;
   const frameDepth = d + 0.02;
@@ -19,6 +19,48 @@ function Opening({ data, isDark }) {
   const doorColor = "#92400e"; // Wood
 
   if (type === 'window') {
+    const innerW = w - 2 * frameThick;
+    const innerH = h - 2 * frameThick;
+    const sashW = innerW / 2;
+    const sashH = innerH;
+
+    const angle = Math.PI / 3;
+    const leftAngle = isFlipped ? -angle : angle;
+    const rightAngle = isFlipped ? angle : -angle;
+
+    const Sash = ({ width }) => (
+      <group>
+        {/* Glass */}
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[width, sashH, glassThick]} />
+          <meshStandardMaterial 
+            color={glassColor} 
+            transparent 
+            opacity={0.3} 
+            roughness={0.1}
+            metalness={0.1}
+          />
+        </mesh>
+        {/* Frame Border */}
+        <mesh position={[0, sashH/2 - 0.02, 0]} castShadow receiveShadow>
+           <boxGeometry args={[width, 0.04, frameDepth - 0.05]} />
+           <meshStandardMaterial color={frameColor} />
+        </mesh>
+        <mesh position={[0, -sashH/2 + 0.02, 0]} castShadow receiveShadow>
+           <boxGeometry args={[width, 0.04, frameDepth - 0.05]} />
+           <meshStandardMaterial color={frameColor} />
+        </mesh>
+        <mesh position={[-width/2 + 0.02, 0, 0]} castShadow receiveShadow>
+           <boxGeometry args={[0.04, sashH, frameDepth - 0.05]} />
+           <meshStandardMaterial color={frameColor} />
+        </mesh>
+        <mesh position={[width/2 - 0.02, 0, 0]} castShadow receiveShadow>
+           <boxGeometry args={[0.04, sashH, frameDepth - 0.05]} />
+           <meshStandardMaterial color={frameColor} />
+        </mesh>
+      </group>
+    );
+
     return (
       <group position={data.pos} rotation={data.rot}>
         {/* Frame Top/Bottom */}
@@ -40,44 +82,24 @@ function Opening({ data, isDark }) {
            <meshStandardMaterial color={frameColor} />
         </mesh>
 
-        {/* Sash (Rotating Part) */}
-        {/* Pivot at left side: x = -w/2 + frameThick */}
-        <group position={[-w/2 + frameThick, 0, 0]} rotation={[0, isOpen ? Math.PI / 3 : 0, 0]}>
-          <group position={[w/2 - frameThick, 0, 0]}> {/* Center sash back to local origin */}
-             {/* Sash Frame and Glass */}
-             <mesh castShadow receiveShadow>
-               <boxGeometry args={[w - 2*frameThick, h - 2*frameThick, glassThick]} />
-               <meshStandardMaterial 
-                 color={glassColor} 
-                 transparent 
-                 opacity={0.3} 
-                 roughness={0.1}
-                 metalness={0.1}
-               />
-             </mesh>
-             {/* Sash Border */}
-             <mesh position={[0, (h - 2*frameThick)/2 - 0.02, 0]} castShadow receiveShadow>
-                <boxGeometry args={[w - 2*frameThick, 0.04, frameDepth - 0.05]} />
-                <meshStandardMaterial color={frameColor} />
-             </mesh>
-             <mesh position={[0, -(h - 2*frameThick)/2 + 0.02, 0]} castShadow receiveShadow>
-                <boxGeometry args={[w - 2*frameThick, 0.04, frameDepth - 0.05]} />
-                <meshStandardMaterial color={frameColor} />
-             </mesh>
-             <mesh position={[-(w - 2*frameThick)/2 + 0.02, 0, 0]} castShadow receiveShadow>
-                <boxGeometry args={[0.04, h - 2*frameThick, frameDepth - 0.05]} />
-                <meshStandardMaterial color={frameColor} />
-             </mesh>
-             <mesh position={[(w - 2*frameThick)/2 - 0.02, 0, 0]} castShadow receiveShadow>
-                <boxGeometry args={[0.04, h - 2*frameThick, frameDepth - 0.05]} />
-                <meshStandardMaterial color={frameColor} />
-             </mesh>
+        {/* Left Sash */}
+        <group position={[-w/2 + frameThick, 0, 0]} rotation={[0, isOpen ? leftAngle : 0, 0]}>
+          <group position={[sashW/2, 0, 0]}>
+             <Sash width={sashW} />
+          </group>
+        </group>
+
+        {/* Right Sash */}
+        <group position={[w/2 - frameThick, 0, 0]} rotation={[0, isOpen ? rightAngle : 0, 0]}>
+          <group position={[-sashW/2, 0, 0]}>
+             <Sash width={sashW} />
           </group>
         </group>
       </group>
     );
   } else {
     // Door
+    const angle = isFlipped ? -Math.PI / 2 : Math.PI / 2;
     return (
       <group position={data.pos} rotation={data.rot}>
          {/* Frame Top */}
@@ -97,13 +119,13 @@ function Opening({ data, isDark }) {
 
         {/* Door Panel */}
         {/* Pivot at left: -w/2 + frameThick */}
-        <group position={[-w/2 + frameThick, 0, 0]} rotation={[0, isOpen ? Math.PI / 2 : 0, 0]}>
+        <group position={[-w/2 + frameThick, 0, 0]} rotation={[0, isOpen ? angle : 0, 0]}>
            <mesh position={[(w - 2*frameThick)/2, 0, 0]} castShadow receiveShadow>
              <boxGeometry args={[w - 2*frameThick, h - frameThick, 0.05]} />
              <meshStandardMaterial color={doorColor} />
            </mesh>
            {/* Handle */}
-           <mesh position={[(w - 2*frameThick) - 0.1, 0, 0.04]} castShadow receiveShadow>
+           <mesh position={[(w - 2*frameThick) - 0.1, 0, isFlipped ? -0.04 : 0.04]} castShadow receiveShadow>
              <sphereGeometry args={[0.04]} />
              <meshStandardMaterial color="gold" metalness={0.8} roughness={0.2} />
            </mesh>
@@ -302,7 +324,8 @@ function ProceduralWall({ wall, isDark }) {
            rot: [0, angle - Math.PI/2, 0],
            size: [op.width, op.height, wall.thickness + 0.04],
            type: op.type,
-           isOpen: op.isOpen
+           isOpen: op.isOpen,
+           isFlipped: op.isFlipped
         };
      });
   }, [wall, nodes, openings]);

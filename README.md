@@ -2,6 +2,8 @@
 
 **Built with Gemini 3.0** | *The effortless way to dream up spaces.*
 
+[**🚀 Live Demo**](https://archik.vercel.app/)
+
 ---
 
 Welcome to **Archik**, a fun side project born from the desire to make drawing floor plans as easy as doodling on a napkin—but with superpowers.
