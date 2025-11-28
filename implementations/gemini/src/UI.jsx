@@ -18,12 +18,9 @@ export default function UI() {
   } = useStore();
   
   const activeLayer = layers.find(l => l.id === activeLayerId) || { nodes: [], walls: [], openings: [] };
-  // const { nodes, walls, openings } = activeLayer; // Not strictly needed here unless we use lengths?
-  // Actually we need openings for context menu check
-  const { openings } = activeLayer;
+  // const { openings } = activeLayer; // Replaced by context logic below
 
   const [shareUrl, setShareUrl] = useState(null);
-  // const [shareError, setShareError] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -40,6 +37,8 @@ export default function UI() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mode, setMode, setSelection, setContextMenuData]);
+
+  // ... (Import/Share/Delete logic same) ...
 
   const handleImport = (e) => {
     const file = e.target.files[0];
@@ -76,16 +75,21 @@ export default function UI() {
     }
   };
 
-  // Determine active state for context menu
+  // Context Logic: Find the layer of the selected wall
   let hasWindow = false;
   let hasDoor = false;
   let isOpen = false;
+  
   if (selectedWallIds.length === 1) {
     const wallId = selectedWallIds[0];
-    const wallOpenings = openings.filter(o => o.wallId === wallId);
-    hasWindow = wallOpenings.some(o => o.type === 'window');
-    hasDoor = wallOpenings.some(o => o.type === 'door');
-    if (wallOpenings.length > 0) isOpen = wallOpenings[0].isOpen;
+    // Find layer containing this wall
+    const targetLayer = layers.find(l => l.walls.some(w => w.id === wallId));
+    if (targetLayer) {
+       const wallOpenings = targetLayer.openings.filter(o => o.wallId === wallId);
+       hasWindow = wallOpenings.some(o => o.type === 'window');
+       hasDoor = wallOpenings.some(o => o.type === 'door');
+       if (wallOpenings.length > 0) isOpen = wallOpenings[0].isOpen;
+    }
   }
 
   return (
@@ -257,6 +261,8 @@ function LayerManager() {
   } = useStore();
   const [expanded, setExpanded] = useState(false);
   const [draggedId, setDraggedId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editValue, setEditValue] = useState("");
 
   const displayLayers = [...layers].reverse();
 
@@ -294,6 +300,24 @@ function LayerManager() {
     setDraggedId(null);
   };
 
+  const startEditing = (layer) => {
+    setEditingId(layer.id);
+    setEditValue(layer.name);
+  };
+
+  const saveEdit = () => {
+    if (editingId && editValue.trim()) {
+      updateLayer(editingId, { name: editValue.trim() });
+    }
+    setEditingId(null);
+    setEditValue("");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditValue("");
+  };
+
   return (
     <div className="flex flex-col items-start gap-2">
       <div 
@@ -315,6 +339,7 @@ function LayerManager() {
               const isActive = layer.id === activeLayerId;
               const isWall = layer.type === 'wall';
               const isDragged = draggedId === layer.id;
+              const isEditing = editingId === layer.id;
               
               const activeClass = isWall 
                 ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
@@ -323,8 +348,8 @@ function LayerManager() {
               return (
                 <div 
                   key={layer.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, layer.id)}
+                  draggable={!isEditing}
+                  onDragStart={(e) => !isEditing && handleDragStart(e, layer.id)}
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, layer.id)}
                   className={clsx(
@@ -332,11 +357,7 @@ function LayerManager() {
                     isActive ? activeClass : "border-transparent hover:bg-gray-100 dark:hover:bg-gray-700",
                     isDragged && "opacity-50 border-dashed border-gray-400"
                   )}
-                  onClick={() => setActiveLayer(layer.id)}
-                  onDoubleClick={() => {
-                     const newName = prompt("Rename Layer", layer.name);
-                     if (newName) updateLayer(layer.id, { name: newName });
-                  }}
+                  onClick={() => !isEditing && setActiveLayer(layer.id)}
                 >
                    {/* Drag Handle */}
                    <span className="cursor-grab text-gray-300 dark:text-gray-600 hover:text-gray-500">
@@ -356,26 +377,53 @@ function LayerManager() {
                      {isWall ? '🧱' : '⬜'}
                    </span>
                    
-                   {/* Name */}
-                   <span className="flex-1 truncate select-none" title="Double click to rename">{layer.name}</span>
+                   {/* Name (Editable) */}
+                   {isEditing ? (
+                     <input 
+                       autoFocus
+                       className="flex-1 min-w-0 bg-white dark:bg-gray-900 border border-blue-500 rounded px-1 text-sm focus:outline-none"
+                       value={editValue}
+                       onChange={(e) => setEditValue(e.target.value)}
+                       onBlur={saveEdit}
+                       onKeyDown={(e) => {
+                         if (e.key === 'Enter') saveEdit();
+                         if (e.key === 'Escape') cancelEdit();
+                         e.stopPropagation();
+                       }}
+                       onClick={(e) => e.stopPropagation()}
+                     />
+                   ) : (
+                     <span 
+                       className="flex-1 truncate select-none" 
+                       title="Double click to rename"
+                       onDoubleClick={(e) => {
+                         e.stopPropagation();
+                         startEditing(layer);
+                       }}
+                     >
+                       {layer.name}
+                     </span>
+                   )}
 
-                   {/* Actions (visible on hover) */}
-                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); duplicateLayer(layer.id); }}
-                        title="Duplicate"
-                        className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
-                      >
-                         <Copy size={12} />
-                      </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); removeLayer(layer.id); }}
-                        title="Delete"
-                        className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 rounded"
-                      >
-                         <Trash2 size={12} />
-                      </button>
-                   </div>
+                   {/* Actions (visible on hover, hidden while editing) */}
+                   {!isEditing && (
+                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); duplicateLayer(layer.id); }}
+                          title="Duplicate"
+                          className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                        >
+                           <Copy size={12} />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); removeLayer(layer.id); }}
+                          title="Delete"
+                          className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 rounded"
+                        >
+                           <Trash2 size={12} />
+                        </button>
+                     </div>
+                   )}
                 </div>
               );
             })}

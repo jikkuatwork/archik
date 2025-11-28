@@ -141,24 +141,34 @@ export const useStore = create((set) => ({
   toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
 
   deleteSelection: () => set((state) => {
-    const activeLayer = state.layers.find(l => l.id === state.activeLayerId);
-    if (!activeLayer) return state;
-
     const nodesToDelete = new Set(state.selectedNodeIds);
     const wallsToDelete = new Set(state.selectedWallIds);
     
-    activeLayer.walls.forEach(w => {
-      if (nodesToDelete.has(w.startNodeId) || nodesToDelete.has(w.endNodeId)) {
-        wallsToDelete.add(w.id);
-      }
+    const newLayers = state.layers.map(layer => {
+        // Find implicit wall deletions for this layer
+        const layerWallsToDelete = new Set();
+        // Add globally selected walls that are in this layer
+        layer.walls.forEach(w => {
+            if (wallsToDelete.has(w.id)) layerWallsToDelete.add(w.id);
+        });
+        
+        // Add walls connected to deleted nodes
+        layer.walls.forEach(w => {
+            if (nodesToDelete.has(w.startNodeId) || nodesToDelete.has(w.endNodeId)) {
+                layerWallsToDelete.add(w.id);
+            }
+        });
+
+        // Filter
+        const newNodes = layer.nodes.filter(n => !nodesToDelete.has(n.id));
+        const newWalls = layer.walls.filter(w => !layerWallsToDelete.has(w.id));
+        const newOpenings = layer.openings.filter(o => !layerWallsToDelete.has(o.wallId));
+        
+        return { ...layer, nodes: newNodes, walls: newWalls, openings: newOpenings };
     });
 
-    const newNodes = activeLayer.nodes.filter(n => !nodesToDelete.has(n.id));
-    const newWalls = activeLayer.walls.filter(w => !wallsToDelete.has(w.id));
-    const newOpenings = activeLayer.openings.filter(o => !wallsToDelete.has(o.wallId));
-
     return {
-      layers: state.layers.map(l => l.id === state.activeLayerId ? { ...l, nodes: newNodes, walls: newWalls, openings: newOpenings } : l),
+      layers: newLayers,
       selectedNodeIds: [],
       selectedWallIds: [],
       hoveredNodeId: null,
@@ -251,41 +261,39 @@ export const useStore = create((set) => ({
 
   setWallOpening: (wallId, type) => {
     set((state) => {
-      const activeLayer = state.layers.find(l => l.id === state.activeLayerId);
-      if (!activeLayer) return state;
+      const targetLayer = state.layers.find(l => l.walls.some(w => w.id === wallId));
+      if (!targetLayer) return state;
 
-      const cleanOpenings = activeLayer.openings.filter(o => o.wallId !== wallId);
+      const cleanOpenings = targetLayer.openings.filter(o => o.wallId !== wallId);
       
-      if (!type) {
-        return { 
-           layers: state.layers.map(l => l.id === state.activeLayerId ? { ...l, openings: cleanOpenings } : l) 
+      let newOpenings = cleanOpenings;
+      if (type) {
+        const id = crypto.randomUUID();
+        const newOpening = {
+          id,
+          wallId,
+          type,
+          dist: 0.5,
+          width: type === 'door' ? 1.0 : 1.5,
+          height: type === 'door' ? 2.2 : 1.2,
+          y: type === 'door' ? 0 : 0.9,
+          isOpen: false,
+          isFlipped: false
         };
+        newOpenings = [...cleanOpenings, newOpening];
       }
       
-      const id = crypto.randomUUID();
-      const newOpening = {
-        id,
-        wallId,
-        type,
-        dist: 0.5,
-        width: type === 'door' ? 1.0 : 1.5,
-        height: type === 'door' ? 2.2 : 1.2,
-        y: type === 'door' ? 0 : 0.9,
-        isOpen: false,
-        isFlipped: false
-      };
-      
       return { 
-         layers: state.layers.map(l => l.id === state.activeLayerId ? { ...l, openings: [...cleanOpenings, newOpening] } : l) 
+         layers: state.layers.map(l => l.id === targetLayer.id ? { ...l, openings: newOpenings } : l) 
       };
     });
   },
 
   toggleOpeningStatus: (wallId) => set((state) => {
-    const activeLayer = state.layers.find(l => l.id === state.activeLayerId);
-    if (!activeLayer) return state;
+    const targetLayer = state.layers.find(l => l.walls.some(w => w.id === wallId));
+    if (!targetLayer) return state;
     return {
-      layers: state.layers.map(l => l.id === state.activeLayerId ? {
+      layers: state.layers.map(l => l.id === targetLayer.id ? {
         ...l,
         openings: l.openings.map(o => o.wallId === wallId ? { ...o, isOpen: !o.isOpen } : o)
       } : l)
@@ -293,10 +301,10 @@ export const useStore = create((set) => ({
   }),
 
   flipOpening: (wallId) => set((state) => {
-    const activeLayer = state.layers.find(l => l.id === state.activeLayerId);
-    if (!activeLayer) return state;
+    const targetLayer = state.layers.find(l => l.walls.some(w => w.id === wallId));
+    if (!targetLayer) return state;
     return {
-      layers: state.layers.map(l => l.id === state.activeLayerId ? {
+      layers: state.layers.map(l => l.id === targetLayer.id ? {
         ...l,
         openings: l.openings.map(o => o.wallId === wallId ? { ...o, isFlipped: !o.isFlipped } : o)
       } : l)
@@ -304,10 +312,10 @@ export const useStore = create((set) => ({
   }),
 
   updateNode: (id, x, y) => set((state) => {
-    const activeLayer = state.layers.find(l => l.id === state.activeLayerId);
-    if (!activeLayer) return state;
+    const targetLayer = state.layers.find(l => l.nodes.some(n => n.id === id));
+    if (!targetLayer) return state;
     return {
-      layers: state.layers.map(l => l.id === state.activeLayerId ? {
+      layers: state.layers.map(l => l.id === targetLayer.id ? {
         ...l,
         nodes: l.nodes.map(n => n.id === id ? { ...n, x, y } : n)
       } : l)

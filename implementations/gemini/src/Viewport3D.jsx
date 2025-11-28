@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, SoftShadows } from '@react-three/drei';
+import { OrbitControls, Environment, SoftShadows, Edges } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStore } from './store';
 import { computeWallCorners } from './geometry';
@@ -150,62 +150,101 @@ function Opening({ data, isDark }) {
 }
 
 function ProceduralSlab({ layer, elevation, isDark }) {
-  const shape = useMemo(() => {
-    if (layer.walls.length === 0) return null;
+  const { setActiveLayer, setSelection, setContextMenuData, activeLayerId } = useStore();
+  const isActive = activeLayerId === layer.id;
+  const EPS = 0.001; // Tiny offset to prevent Z-fighting with edge walls
+
+  const shapes = useMemo(() => {
+    if (layer.walls.length === 0) return [];
     
-    const shape = new THREE.Shape();
-    const edges = [...layer.walls];
+    const shapesList = [];
+    const remaining = [...layer.walls];
     const getNode = (id) => layer.nodes.find(n => n.id === id);
-    
-    // Start with the first wall
-    let current = edges.shift();
-    if (!current) return null;
 
-    let nStart = getNode(current.startNodeId);
-    let nEnd = getNode(current.endNodeId);
-    if (!nStart || !nEnd) return null;
+    while (remaining.length > 0) {
+      const shape = new THREE.Shape();
+      
+      let current = remaining.shift();
+      let nStart = getNode(current.startNodeId);
+      let nEnd = getNode(current.endNodeId);
+      if (!nStart || !nEnd) continue;
 
-    shape.moveTo(nStart.x, -nStart.y);
-    shape.lineTo(nEnd.x, -nEnd.y);
-    
-    let tailId = current.endNodeId;
-    
-    // Greedy chain finder
-    while(edges.length > 0) {
-       const idx = edges.findIndex(w => w.startNodeId === tailId || w.endNodeId === tailId);
-       if (idx === -1) break; // Disconnected
-       
-       const nextWall = edges.splice(idx, 1)[0];
-       const isStart = nextWall.startNodeId === tailId;
-       const nextNodeId = isStart ? nextWall.endNodeId : nextWall.startNodeId;
-       
-       tailId = nextNodeId;
-       const p = getNode(tailId);
-       if (p) shape.lineTo(p.x, -p.y);
+      const chainStartId = current.startNodeId;
+
+      shape.moveTo(nStart.x, nStart.y);
+      shape.lineTo(nEnd.x, nEnd.y);
+      
+      let tailId = current.endNodeId;
+      
+      // Trace chain
+      while (true) {
+         const idx = remaining.findIndex(w => w.startNodeId === tailId || w.endNodeId === tailId);
+         if (idx === -1) break; 
+         
+         const nextWall = remaining.splice(idx, 1)[0];
+         const isStart = nextWall.startNodeId === tailId;
+         const nextNodeId = isStart ? nextWall.endNodeId : nextWall.startNodeId;
+         
+         tailId = nextNodeId;
+         const p = getNode(tailId);
+         if (p) shape.lineTo(p.x, p.y);
+      }
+
+      // Only add if it's a closed loop
+      if (tailId === chainStartId) {
+        shapesList.push(shape);
+      }
     }
-
-    return shape;
+    return shapesList;
   }, [layer]);
 
-  if (!shape) return null;
+  if (shapes.length === 0) return null;
 
   return (
-    <mesh 
-      rotation={[-Math.PI / 2, 0, 0]} 
-      position={[0, elevation, 0]} 
-      castShadow 
-      receiveShadow
-    >
-      <extrudeGeometry args={[shape, { depth: layer.height, bevelEnabled: false }]} />
-      <meshStandardMaterial color={isDark ? "#1f2937" : "#9ca3af"} roughness={0.9} />
-    </mesh>
+    <group>
+      {/* Top Face */}
+      <mesh 
+        rotation={[-Math.PI / 2, 0, 0]} 
+        position={[0, elevation + layer.height + EPS, 0]} 
+        castShadow 
+        receiveShadow
+        onClick={(e) => {
+          e.stopPropagation();
+          setActiveLayer(layer.id);
+          setSelection({ nodes: [], walls: [] });
+          setContextMenuData(null);
+        }}
+      >
+        <shapeGeometry args={[shapes]} />
+        <meshStandardMaterial 
+          color={isDark ? "#1f2937" : "#9ca3af"} 
+          roughness={0.9} 
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Bottom Face */}
+      <mesh 
+        rotation={[Math.PI / 2, 0, 0]} 
+        position={[0, elevation - EPS, 0]} 
+        scale={[1, -1, 1]}
+        receiveShadow
+      >
+        <shapeGeometry args={[shapes]} />
+        <meshStandardMaterial 
+          color={isDark ? "#1f2937" : "#9ca3af"} 
+          roughness={0.9} 
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+    </group>
   );
 }
 
-function ProceduralWall({ wall, layer, elevation, isDark }) {
+function ProceduralWall({ wall, layer, elevation, isDark, height = 2.5, overrideColor }) {
   // Read from layer prop, NOT global store for geometry
   const { nodes, walls, openings } = layer; 
-  const { selectedWallIds, setSelection, setContextMenuData } = useStore();
+  const { selectedWallIds, setSelection, setContextMenuData, setActiveLayer } = useStore();
   const isSelected = selectedWallIds.includes(wall.id);
   
   const geometry = useMemo(() => {
@@ -294,11 +333,11 @@ function ProceduralWall({ wall, layer, elevation, isDark }) {
     
     segments.forEach(seg => {
       if (seg.type === 'solid') {
-        addBlock(seg.t0, seg.t1, 0, layer.height);
+        addBlock(seg.t0, seg.t1, 0, height);
       } else {
         const op = seg.opening;
         if (op.y > 0) addBlock(seg.t0, seg.t1, 0, op.y);
-        if (op.y + op.height < layer.height) addBlock(seg.t0, seg.t1, op.y + op.height, layer.height);
+        if (op.y + op.height < height) addBlock(seg.t0, seg.t1, op.y + op.height, height);
       }
     });
 
@@ -307,7 +346,7 @@ function ProceduralWall({ wall, layer, elevation, isDark }) {
     geo.setIndex(indices);
     geo.computeVertexNormals();
     return geo;
-  }, [wall, nodes, walls, openings, elevation, layer.height]);
+  }, [wall, nodes, walls, openings, elevation, height]);
 
   const wallOpenings = useMemo(() => {
      const start = nodes.find(n => n.id === wall.startNodeId);
@@ -348,12 +387,13 @@ function ProceduralWall({ wall, layer, elevation, isDark }) {
         receiveShadow
         onClick={(e) => {
           e.stopPropagation();
+          setActiveLayer(layer.id);
           setSelection({ nodes: [], walls: [wall.id] });
           setContextMenuData({ x: e.clientX, y: e.clientY });
         }}
       >
         <meshStandardMaterial 
-          color={isSelected ? "#60a5fa" : (isDark ? "#e5e7eb" : "#ffffff")} 
+          color={isSelected ? "#60a5fa" : (overrideColor || (isDark ? "#e5e7eb" : "#ffffff"))} 
           roughness={0.8} 
         />
       </mesh>
@@ -414,17 +454,32 @@ export default function Viewport3D() {
                 wall={wall} 
                 layer={layer} 
                 elevation={elevation} 
+                height={layer.height}
                 isDark={isDark} 
               />
             ));
           } else if (layer.type === 'floor') {
             return (
-              <ProceduralSlab 
-                key={layer.id} 
-                layer={layer} 
-                elevation={elevation} 
-                isDark={isDark} 
-              />
+              <group key={layer.id}>
+                {/* The Slab Fill */}
+                <ProceduralSlab 
+                  layer={layer} 
+                  elevation={elevation} 
+                  isDark={isDark} 
+                />
+                {/* The Slab Edges (Interactable) */}
+                {layer.walls.map(wall => (
+                  <ProceduralWall 
+                    key={wall.id} 
+                    wall={wall} 
+                    layer={layer} 
+                    elevation={elevation} 
+                    height={layer.height}
+                    isDark={isDark}
+                    overrideColor={isDark ? "#1f2937" : "#9ca3af"}
+                  />
+                ))}
+              </group>
             );
           }
           return null;

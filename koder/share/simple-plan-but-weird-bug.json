@@ -1,0 +1,118 @@
+{
+  "layers": [
+    {
+      "id": "layer-1",
+      "name": "Ground Floor",
+      "type": "wall",
+      "visible": true,
+      "height": 2.5,
+      "nodes": [
+        {
+          "id": "n1",
+          "x": -2,
+          "y": -2
+        },
+        {
+          "id": "n2",
+          "x": 2,
+          "y": -2
+        },
+        {
+          "id": "n3",
+          "x": 2,
+          "y": 2
+        },
+        {
+          "id": "n4",
+          "x": -2,
+          "y": 2
+        }
+      ],
+      "walls": [
+        {
+          "id": "w1",
+          "startNodeId": "n1",
+          "endNodeId": "n2",
+          "thickness": 0.2
+        },
+        {
+          "id": "w2",
+          "startNodeId": "n2",
+          "endNodeId": "n3",
+          "thickness": 0.2
+        },
+        {
+          "id": "w3",
+          "startNodeId": "n3",
+          "endNodeId": "n4",
+          "thickness": 0.2
+        },
+        {
+          "id": "w4",
+          "startNodeId": "n4",
+          "endNodeId": "n1",
+          "thickness": 0.2
+        }
+      ],
+      "openings": []
+    },
+    {
+      "id": "84227dde-4c25-4503-a956-df938d113e34",
+      "name": "New Floor",
+      "type": "floor",
+      "visible": true,
+      "height": 0.2,
+      "nodes": [
+        {
+          "id": "9a09316f-b073-48ce-9463-5e6a71080b04",
+          "x": -2.9,
+          "y": 2.9
+        },
+        {
+          "id": "37098c2a-37b9-4ed3-9408-928c546d1cfd",
+          "x": 3.9,
+          "y": 3.1
+        },
+        {
+          "id": "c8d35774-8f0c-4258-945f-2d735d9ff4d1",
+          "x": 2.4,
+          "y": -3.6
+        },
+        {
+          "id": "0db86dff-218d-464a-af9a-a454e71efb18",
+          "x": -3,
+          "y": -3.5
+        }
+      ],
+      "walls": [
+        {
+          "id": "938f9fa7-6a1b-4b4e-836e-ebe53c25ed58",
+          "startNodeId": "9a09316f-b073-48ce-9463-5e6a71080b04",
+          "endNodeId": "37098c2a-37b9-4ed3-9408-928c546d1cfd",
+          "thickness": 0.2
+        },
+        {
+          "id": "1e94ace0-1ecd-4df1-b360-e50069d50703",
+          "startNodeId": "37098c2a-37b9-4ed3-9408-928c546d1cfd",
+          "endNodeId": "c8d35774-8f0c-4258-945f-2d735d9ff4d1",
+          "thickness": 0.2
+        },
+        {
+          "id": "33710b13-21a8-4284-86e8-eff89ed83c70",
+          "startNodeId": "c8d35774-8f0c-4258-945f-2d735d9ff4d1",
+          "endNodeId": "0db86dff-218d-464a-af9a-a454e71efb18",
+          "thickness": 0.2
+        },
+        {
+          "id": "68ba5b65-5539-4e9d-b1e0-3debc3fec1b4",
+          "startNodeId": "0db86dff-218d-464a-af9a-a454e71efb18",
+          "endNodeId": "9a09316f-b073-48ce-9463-5e6a71080b04",
+          "thickness": 0.2
+        }
+      ],
+      "openings": []
+    }
+  ],
+  "activeLayerId": "84227dde-4c25-4503-a956-df938d113e34",
+  "version": 2
+}

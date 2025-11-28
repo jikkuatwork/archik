@@ -72,10 +72,18 @@ export default function Editor2D() {
     };
   };
 
-  const handleWheel = (e) => {
-    e.preventDefault();
-    setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
-  };
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    
+    const onWheel = (e) => {
+      e.preventDefault();
+      setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
+    };
+    
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => container.removeEventListener('wheel', onWheel);
+  }, []);
 
   const handlePointerDown = (e) => {
     if (e.button !== 0) return;
@@ -289,7 +297,6 @@ export default function Editor2D() {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onContextMenu={handleContextMenu}
-        onWheel={handleWheel}
       >
         <defs>
           <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse" patternTransform={`translate(${pan.x},${pan.y})`}>
