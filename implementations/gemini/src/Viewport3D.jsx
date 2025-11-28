@@ -150,8 +150,7 @@ function Opening({ data, isDark }) {
 }
 
 function ProceduralSlab({ layer, elevation, isDark }) {
-  const { setActiveLayer, setSelection, setContextMenuData, activeLayerId } = useStore();
-  const isActive = activeLayerId === layer.id;
+  const { setActiveLayer, setSelection, setContextMenuData } = useStore();
   const EPS = 0.001; // Tiny offset to prevent Z-fighting with edge walls
 
   const shapes = useMemo(() => {
@@ -404,17 +403,146 @@ function ProceduralWall({ wall, layer, elevation, isDark, height = 2.5, override
   );
 }
 
+function RailingSection({ length, isDark }) {
+  const postRadius = 0.03;
+  const railRadius = 0.02;
+  const height = 1.0;
+  const balusterCount = Math.floor(length / 0.15);
+  
+  const color = isDark ? "#4b5563" : "#d1d5db"; // Metal gray
+  
+  return (
+    <group>
+      {/* End Posts */}
+      <mesh position={[-length/2 + postRadius, height/2, 0]} castShadow receiveShadow>
+         <cylinderGeometry args={[postRadius, postRadius, height]} />
+         <meshStandardMaterial color={color} />
+      </mesh>
+      <mesh position={[length/2 - postRadius, height/2, 0]} castShadow receiveShadow>
+         <cylinderGeometry args={[postRadius, postRadius, height]} />
+         <meshStandardMaterial color={color} />
+      </mesh>
+      
+      {/* Top Rail */}
+      <mesh position={[0, height - 0.05, 0]} rotation={[0, 0, Math.PI/2]} castShadow receiveShadow>
+         <cylinderGeometry args={[railRadius, railRadius, length]} />
+         <meshStandardMaterial color={color} />
+      </mesh>
+      {/* Bottom Rail */}
+      <mesh position={[0, 0.1, 0]} rotation={[0, 0, Math.PI/2]} castShadow receiveShadow>
+         <cylinderGeometry args={[railRadius, railRadius, length]} />
+         <meshStandardMaterial color={color} />
+      </mesh>
+      
+      {/* Balusters */}
+      {Array.from({ length: balusterCount }).map((_, i) => {
+         const x = -length/2 + (i + 1) * (length / (balusterCount + 1));
+         return (
+            <mesh key={i} position={[x, height/2, 0]} castShadow receiveShadow>
+               <cylinderGeometry args={[0.01, 0.01, height]} />
+               <meshStandardMaterial color={color} />
+            </mesh>
+         );
+      })}
+    </group>
+  );
+}
+
+function Gate({ width, isOpen, isDark }) {
+  const height = 1.0;
+  const color = isDark ? "#4b5563" : "#d1d5db";
+  
+  return (
+    <group rotation={[0, isOpen ? Math.PI / 2 : 0, 0]} position={[-width/2, 0, 0]}>
+       <group position={[width/2, 0, 0]}>
+         {/* Gate Frame */}
+         <mesh position={[-width/2 + 0.02, height/2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[0.04, height, 0.04]} />
+            <meshStandardMaterial color={color} />
+         </mesh>
+         <mesh position={[width/2 - 0.02, height/2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[0.04, height, 0.04]} />
+            <meshStandardMaterial color={color} />
+         </mesh>
+         <mesh position={[0, height - 0.02, 0]} castShadow receiveShadow>
+            <boxGeometry args={[width, 0.04, 0.04]} />
+            <meshStandardMaterial color={color} />
+         </mesh>
+         <mesh position={[0, 0.02, 0]} castShadow receiveShadow>
+            <boxGeometry args={[width, 0.04, 0.04]} />
+            <meshStandardMaterial color={color} />
+         </mesh>
+         
+         {/* Glass/Infill */}
+         <mesh position={[0, height/2, 0]}>
+            <planeGeometry args={[width - 0.1, height - 0.1]} />
+            <meshStandardMaterial color="#bae6fd" transparent opacity={0.2} side={THREE.DoubleSide} />
+         </mesh>
+       </group>
+    </group>
+  );
+}
+
+function Railing({ wall, layer, elevation, isDark }) {
+  const { nodes } = layer;
+  const { hasGate, gateOpen } = wall;
+  const startNode = nodes.find(n => n.id === wall.startNodeId);
+  const endNode = nodes.find(n => n.id === wall.endNodeId);
+  
+  if (!startNode || !endNode) return null;
+
+  const dx = endNode.x - startNode.x;
+  const dy = -(endNode.y - startNode.y); // R3F Z is negative Y
+  const len = Math.hypot(dx, dy);
+  const angle = Math.atan2(dy, dx); 
+  
+  const midX = (startNode.x + endNode.x) / 2;
+  const midZ = -(startNode.y + endNode.y) / 2;
+
+  const gateWidth = 1.0;
+  const canHaveGate = len > gateWidth + 0.2;
+  const effectiveGate = hasGate && canHaveGate;
+
+  return (
+    <group position={[midX, elevation, midZ]} rotation={[0, -angle, 0]}>
+       {effectiveGate ? (
+         <>
+           {/* Left Section */}
+           <group position={[-(len - gateWidth)/4 - gateWidth/2, 0, 0]}>
+              <RailingSection length={(len - gateWidth)/2} isDark={isDark} />
+           </group>
+           
+           {/* Gate Section */}
+           <group position={[0, 0, 0]}>
+              <Gate width={gateWidth} isOpen={gateOpen} isDark={isDark} />
+           </group>
+           
+           {/* Right Section */}
+           <group position={[(len - gateWidth)/4 + gateWidth/2, 0, 0]}>
+              <RailingSection length={(len - gateWidth)/2} isDark={isDark} />
+           </group>
+         </>
+       ) : (
+         <RailingSection length={len} isDark={isDark} />
+       )}
+    </group>
+  );
+}
+
 export default function Viewport3D() {
   const { layers, theme, setSelection, setContextMenuData } = useStore();
   const isDark = theme === 'dark';
 
   const visibleLayers = layers.filter(l => l.visible);
-  let cumulativeHeight = 0;
-  const layerStack = visibleLayers.map(layer => {
-    const elevation = cumulativeHeight;
-    cumulativeHeight += layer.height;
-    return { layer, elevation };
-  });
+  
+  const layerStack = useMemo(() => {
+    return visibleLayers.reduce((acc, layer) => {
+      const last = acc[acc.length - 1];
+      const elevation = last ? last.elevation + last.layer.height : 0;
+      acc.push({ layer, elevation });
+      return acc;
+    }, []);
+  }, [visibleLayers]);
 
   return (
     <div className="w-full h-full relative z-0">
@@ -469,15 +597,24 @@ export default function Viewport3D() {
                 />
                 {/* The Slab Edges (Interactable) */}
                 {layer.walls.map(wall => (
-                  <ProceduralWall 
-                    key={wall.id} 
-                    wall={wall} 
-                    layer={layer} 
-                    elevation={elevation} 
-                    height={layer.height}
-                    isDark={isDark}
-                    overrideColor={isDark ? "#1f2937" : "#9ca3af"}
-                  />
+                  <React.Fragment key={wall.id}>
+                    <ProceduralWall 
+                      wall={wall} 
+                      layer={layer} 
+                      elevation={elevation} 
+                      height={layer.height}
+                      isDark={isDark}
+                      overrideColor={isDark ? "#1f2937" : "#9ca3af"}
+                    />
+                    {wall.hasRailing && (
+                      <Railing 
+                        wall={wall}
+                        layer={layer}
+                        elevation={elevation + layer.height}
+                        isDark={isDark}
+                      />
+                    )}
+                  </React.Fragment>
                 ))}
               </group>
             );

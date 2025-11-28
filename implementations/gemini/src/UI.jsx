@@ -3,7 +3,7 @@ import { useStore } from './store';
 import { 
   PenTool, MousePointer2, Trash2, AppWindow, DoorOpen, Download, Upload, Share2, 
   Sun, Moon, Lock, LockOpen, Repeat, Layers, Plus, Eye, EyeOff, ChevronUp, ChevronDown, Copy,
-  GripVertical
+  GripVertical, Fence
 } from 'lucide-react';
 import { exportToJSON, importFromJSON, generateShareURL } from './persistence';
 import clsx from 'clsx';
@@ -12,15 +12,16 @@ export default function UI() {
   const { 
     mode, setMode, reset, 
     selectedWallIds, selectedNodeIds, deleteSelection, setWallOpening, toggleOpeningStatus, flipOpening,
+    setWallRailing, setRailingGate, toggleRailingGate,
     layers, activeLayerId, setAll,
     contextMenuData, theme, toggleTheme,
     setSelection, setContextMenuData
   } = useStore();
   
-  const activeLayer = layers.find(l => l.id === activeLayerId) || { nodes: [], walls: [], openings: [] };
   // const { openings } = activeLayer; // Replaced by context logic below
 
   const [shareUrl, setShareUrl] = useState(null);
+  const [shareError, setShareError] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -79,16 +80,30 @@ export default function UI() {
   let hasWindow = false;
   let hasDoor = false;
   let isOpen = false;
+  let isFloor = false;
+  let hasRailing = false;
+  let hasGate = false;
+  let isGateOpen = false;
   
   if (selectedWallIds.length === 1) {
     const wallId = selectedWallIds[0];
     // Find layer containing this wall
     const targetLayer = layers.find(l => l.walls.some(w => w.id === wallId));
     if (targetLayer) {
-       const wallOpenings = targetLayer.openings.filter(o => o.wallId === wallId);
-       hasWindow = wallOpenings.some(o => o.type === 'window');
-       hasDoor = wallOpenings.some(o => o.type === 'door');
-       if (wallOpenings.length > 0) isOpen = wallOpenings[0].isOpen;
+       if (targetLayer.type === 'wall') {
+         const wallOpenings = targetLayer.openings.filter(o => o.wallId === wallId);
+         hasWindow = wallOpenings.some(o => o.type === 'window');
+         hasDoor = wallOpenings.some(o => o.type === 'door');
+         if (wallOpenings.length > 0) isOpen = wallOpenings[0].isOpen;
+       } else if (targetLayer.type === 'floor') {
+         isFloor = true;
+         const w = targetLayer.walls.find(w => w.id === wallId);
+         if (w) {
+           hasRailing = w.hasRailing;
+           hasGate = w.hasGate;
+           isGateOpen = w.gateOpen;
+         }
+       }
     }
   }
 
@@ -115,33 +130,65 @@ export default function UI() {
         {/* Contextual Modifiers (Vertical) */}
         {selectedWallIds.length === 1 && (
           <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-white/20 dark:border-white/10 flex flex-col gap-2 transition-colors animate-in slide-in-from-left-2 duration-200">
-            <ToolButton 
-              active={hasWindow}
-              onClick={() => setWallOpening(selectedWallIds[0], hasWindow ? null : 'window')}
-              icon={<AppWindow size={20} />}
-              label="Window"
-            />
-            <ToolButton 
-              active={hasDoor}
-              onClick={() => setWallOpening(selectedWallIds[0], hasDoor ? null : 'door')}
-              icon={<DoorOpen size={20} />}
-              label="Door"
-            />
-            
-            {(hasWindow || hasDoor) && (
+            {!isFloor ? (
               <>
-                <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
                 <ToolButton 
-                  onClick={() => toggleOpeningStatus(selectedWallIds[0])}
-                  icon={isOpen ? <LockOpen size={20} /> : <Lock size={20} />}
-                  label={isOpen ? "Close" : "Open"}
-                  active={isOpen}
+                  active={hasWindow}
+                  onClick={() => setWallOpening(selectedWallIds[0], hasWindow ? null : 'window')}
+                  icon={<AppWindow size={20} />}
+                  label="Window"
                 />
                 <ToolButton 
-                  onClick={() => flipOpening(selectedWallIds[0])}
-                  icon={<Repeat size={20} />}
-                  label="Flip Dir"
+                  active={hasDoor}
+                  onClick={() => setWallOpening(selectedWallIds[0], hasDoor ? null : 'door')}
+                  icon={<DoorOpen size={20} />}
+                  label="Door"
                 />
+                
+                {(hasWindow || hasDoor) && (
+                  <>
+                    <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
+                    <ToolButton 
+                      onClick={() => toggleOpeningStatus(selectedWallIds[0])}
+                      icon={isOpen ? <LockOpen size={20} /> : <Lock size={20} />}
+                      label={isOpen ? "Close" : "Open"}
+                      active={isOpen}
+                    />
+                    <ToolButton 
+                      onClick={() => flipOpening(selectedWallIds[0])}
+                      icon={<Repeat size={20} />}
+                      label="Flip Dir"
+                    />
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <ToolButton 
+                  active={hasRailing}
+                  onClick={() => setWallRailing(selectedWallIds[0], !hasRailing)}
+                  icon={<Fence size={20} />}
+                  label="Railing"
+                />
+                {hasRailing && (
+                  <>
+                     <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
+                     <ToolButton 
+                        active={hasGate}
+                        onClick={() => setRailingGate(selectedWallIds[0], !hasGate)}
+                        icon={<DoorOpen size={20} />}
+                        label="Gate"
+                     />
+                     {hasGate && (
+                       <ToolButton 
+                          onClick={() => toggleRailingGate(selectedWallIds[0])}
+                          icon={isGateOpen ? <LockOpen size={20} /> : <Lock size={20} />}
+                          label={isGateOpen ? "Close" : "Open"}
+                          active={isGateOpen}
+                       />
+                     )}
+                  </>
+                )}
               </>
             )}
           </div>
@@ -193,6 +240,11 @@ export default function UI() {
                 Plan is too large to share via URL. Use JSON Export.
               </div>
             )}
+            {shareError && !isTooLarge && (
+              <div className="absolute right-0 top-full mt-2 px-3 py-2 bg-red-800 text-white text-xs rounded shadow-lg w-32 z-50 animate-in fade-in">
+                Failed to generate URL.
+              </div>
+            )}
           </div>
           
           <div className="w-px bg-gray-200 dark:bg-gray-700 mx-1" />
@@ -211,41 +263,78 @@ export default function UI() {
           className="absolute z-50 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm p-2 rounded-xl shadow-xl border border-white/20 dark:border-white/10 flex flex-row items-center gap-2 animate-in fade-in zoom-in-95 duration-150 transition-colors"
           style={{ top: contextMenuData.y + 10, left: contextMenuData.x + 10 }}
         >
-          <div className="flex flex-row gap-1">
-            <ToolButton 
-              active={hasWindow}
-              onClick={() => setWallOpening(selectedWallIds[0], hasWindow ? null : 'window')}
-              icon={<AppWindow size={16} />}
-              label="Window"
-              className="text-sm"
-            />
-            <ToolButton 
-              active={hasDoor}
-              onClick={() => setWallOpening(selectedWallIds[0], hasDoor ? null : 'door')}
-              icon={<DoorOpen size={16} />}
-              label="Door"
-              className="text-sm"
-            />
-          </div>
-          
-          {(hasWindow || hasDoor) && (
+          {!isFloor ? (
             <>
-              <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
               <div className="flex flex-row gap-1">
                 <ToolButton 
-                  onClick={() => toggleOpeningStatus(selectedWallIds[0])}
-                  icon={isOpen ? <LockOpen size={16} /> : <Lock size={16} />}
-                  label={isOpen ? "Close" : "Open"}
+                  active={hasWindow}
+                  onClick={() => setWallOpening(selectedWallIds[0], hasWindow ? null : 'window')}
+                  icon={<AppWindow size={16} />}
+                  label="Window"
                   className="text-sm"
-                  active={isOpen}
                 />
                 <ToolButton 
-                  onClick={() => flipOpening(selectedWallIds[0])}
-                  icon={<Repeat size={16} />}
-                  label="Flip Dir"
+                  active={hasDoor}
+                  onClick={() => setWallOpening(selectedWallIds[0], hasDoor ? null : 'door')}
+                  icon={<DoorOpen size={16} />}
+                  label="Door"
                   className="text-sm"
                 />
               </div>
+              
+              {(hasWindow || hasDoor) && (
+                <>
+                  <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+                  <div className="flex flex-row gap-1">
+                    <ToolButton 
+                      onClick={() => toggleOpeningStatus(selectedWallIds[0])}
+                      icon={isOpen ? <LockOpen size={16} /> : <Lock size={16} />}
+                      label={isOpen ? "Close" : "Open"}
+                      className="text-sm"
+                      active={isOpen}
+                    />
+                    <ToolButton 
+                      onClick={() => flipOpening(selectedWallIds[0])}
+                      icon={<Repeat size={16} />}
+                      label="Flip Dir"
+                      className="text-sm"
+                    />
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <ToolButton 
+                active={hasRailing}
+                onClick={() => setWallRailing(selectedWallIds[0], !hasRailing)}
+                icon={<Fence size={16} />}
+                label="Railing"
+                className="text-sm"
+              />
+              {hasRailing && (
+                <>
+                   <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+                   <div className="flex flex-row gap-1">
+                      <ToolButton 
+                        active={hasGate}
+                        onClick={() => setRailingGate(selectedWallIds[0], !hasGate)}
+                        icon={<DoorOpen size={16} />}
+                        label="Gate"
+                        className="text-sm"
+                      />
+                      {hasGate && (
+                        <ToolButton 
+                           onClick={() => toggleRailingGate(selectedWallIds[0])}
+                           icon={isGateOpen ? <LockOpen size={16} /> : <Lock size={16} />}
+                           label={isGateOpen ? "Close" : "Open"}
+                           className="text-sm"
+                           active={isGateOpen}
+                        />
+                      )}
+                   </div>
+                </>
+              )}
             </>
           )}
         </div>

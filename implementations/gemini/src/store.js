@@ -311,6 +311,49 @@ export const useStore = create((set) => ({
     };
   }),
 
+  // --- Railing Actions (For Floor Edges) ---
+
+  setWallRailing: (wallId, hasRailing) => set((state) => {
+    const targetLayer = state.layers.find(l => l.walls.some(w => w.id === wallId));
+    if (!targetLayer || targetLayer.type !== 'floor') return state;
+    
+    return {
+      layers: state.layers.map(l => l.id === targetLayer.id ? {
+        ...l,
+        walls: l.walls.map(w => w.id === wallId ? { 
+            ...w, 
+            hasRailing, 
+            hasGate: hasRailing ? w.hasGate : false, // Reset gate if railing removed
+            gateOpen: false 
+        } : w)
+      } : l)
+    };
+  }),
+
+  setRailingGate: (wallId, hasGate) => set((state) => {
+    const targetLayer = state.layers.find(l => l.walls.some(w => w.id === wallId));
+    if (!targetLayer || targetLayer.type !== 'floor') return state;
+    
+    return {
+      layers: state.layers.map(l => l.id === targetLayer.id ? {
+        ...l,
+        walls: l.walls.map(w => w.id === wallId ? { ...w, hasGate, gateOpen: false } : w)
+      } : l)
+    };
+  }),
+
+  toggleRailingGate: (wallId) => set((state) => {
+    const targetLayer = state.layers.find(l => l.walls.some(w => w.id === wallId));
+    if (!targetLayer || targetLayer.type !== 'floor') return state;
+
+    return {
+      layers: state.layers.map(l => l.id === targetLayer.id ? {
+        ...l,
+        walls: l.walls.map(w => w.id === wallId ? { ...w, gateOpen: !w.gateOpen } : w)
+      } : l)
+    };
+  }),
+
   updateNode: (id, x, y) => set((state) => {
     const targetLayer = state.layers.find(l => l.nodes.some(n => n.id === id));
     if (!targetLayer) return state;
