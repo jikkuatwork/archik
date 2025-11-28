@@ -450,34 +450,99 @@ function RailingSection({ length, isDark }) {
 
 function Gate({ width, isOpen, isDark }) {
   const height = 1.0;
-  const color = isDark ? "#4b5563" : "#d1d5db";
+  const frameColor = isDark ? "#374151" : "#6b7280"; 
+  const panelColor = isDark ? "#4b5563" : "#9ca3af";
+  const metalColor = "#1f2937"; // Dark metal for handle/hinges
+  
+  // Dimensions
+  const frameThick = 0.05;
+  const barRadius = 0.008;
+  const barCount = 6;
   
   return (
     <group rotation={[0, isOpen ? Math.PI / 2 : 0, 0]} position={[-width/2, 0, 0]}>
        <group position={[width/2, 0, 0]}>
-         {/* Gate Frame */}
-         <mesh position={[-width/2 + 0.02, height/2, 0]} castShadow receiveShadow>
-            <boxGeometry args={[0.04, height, 0.04]} />
-            <meshStandardMaterial color={color} />
-         </mesh>
-         <mesh position={[width/2 - 0.02, height/2, 0]} castShadow receiveShadow>
-            <boxGeometry args={[0.04, height, 0.04]} />
-            <meshStandardMaterial color={color} />
-         </mesh>
-         <mesh position={[0, height - 0.02, 0]} castShadow receiveShadow>
-            <boxGeometry args={[width, 0.04, 0.04]} />
-            <meshStandardMaterial color={color} />
-         </mesh>
-         <mesh position={[0, 0.02, 0]} castShadow receiveShadow>
-            <boxGeometry args={[width, 0.04, 0.04]} />
-            <meshStandardMaterial color={color} />
-         </mesh>
          
-         {/* Glass/Infill */}
-         <mesh position={[0, height/2, 0]}>
-            <planeGeometry args={[width - 0.1, height - 0.1]} />
-            <meshStandardMaterial color="#bae6fd" transparent opacity={0.2} side={THREE.DoubleSide} />
+         {/* -- Hinges (Pivot Side) -- */}
+         <group position={[-width/2 + frameThick/2, 0, 0]}>
+            <mesh position={[-0.02, height - 0.2, 0]} castShadow>
+                <cylinderGeometry args={[0.015, 0.015, 0.1]} />
+                <meshStandardMaterial color={metalColor} />
+            </mesh>
+            <mesh position={[-0.02, 0.2, 0]} castShadow>
+                <cylinderGeometry args={[0.015, 0.015, 0.1]} />
+                <meshStandardMaterial color={metalColor} />
+            </mesh>
+         </group>
+
+         {/* -- Main Frame -- */}
+         {/* Vertical Left */}
+         <mesh position={[-width/2 + frameThick/2, height/2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[frameThick, height, frameThick]} />
+            <meshStandardMaterial color={frameColor} />
          </mesh>
+         {/* Vertical Right */}
+         <mesh position={[width/2 - frameThick/2, height/2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[frameThick, height, frameThick]} />
+            <meshStandardMaterial color={frameColor} />
+         </mesh>
+         {/* Horizontal Top */}
+         <mesh position={[0, height - frameThick/2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[width, frameThick, frameThick]} />
+            <meshStandardMaterial color={frameColor} />
+         </mesh>
+         {/* Horizontal Bottom */}
+         <mesh position={[0, frameThick/2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[width, frameThick, frameThick]} />
+            <meshStandardMaterial color={frameColor} />
+         </mesh>
+         {/* Horizontal Middle (Divider) */}
+         <mesh position={[0, height * 0.4, 0]} castShadow receiveShadow>
+            <boxGeometry args={[width - 2*frameThick, 0.04, 0.03]} />
+            <meshStandardMaterial color={frameColor} />
+         </mesh>
+
+         {/* -- Infill: Vertical Bars (Top Section) -- */}
+         {Array.from({ length: barCount }).map((_, i) => {
+             const sectionWidth = width - 2 * frameThick;
+             const spacing = sectionWidth / (barCount + 1);
+             const x = -sectionWidth/2 + (i + 1) * spacing;
+             const topSectionH = height * 0.6 - frameThick - 0.02; // Approx height
+             const barCenterY = height * 0.4 + 0.02 + topSectionH/2;
+             
+             return (
+                <mesh key={i} position={[x, barCenterY, 0]} castShadow>
+                    <cylinderGeometry args={[barRadius, barRadius, topSectionH]} />
+                    <meshStandardMaterial color={panelColor} />
+                </mesh>
+             );
+         })}
+         
+         {/* -- Infill: Solid Panel (Bottom Section) -- */}
+         <mesh position={[0, (height * 0.4)/2 + frameThick/2, 0]} castShadow receiveShadow>
+             <boxGeometry args={[width - 2*frameThick, height * 0.4 - frameThick, 0.015]} />
+             <meshStandardMaterial color={panelColor} />
+         </mesh>
+
+         {/* -- Handle -- */}
+         <group position={[width/2 - frameThick - 0.06, height * 0.55, 0]}>
+             {/* Handle Base */}
+             <mesh rotation={[Math.PI/2, 0, 0]} castShadow>
+                 <cylinderGeometry args={[0.03, 0.03, 0.04]} />
+                 <meshStandardMaterial color={metalColor} roughness={0.4} metalness={0.6} />
+             </mesh>
+             {/* Lever Front */}
+             <mesh position={[-0.06, 0, 0.03]} castShadow>
+                 <boxGeometry args={[0.12, 0.015, 0.015]} />
+                 <meshStandardMaterial color={metalColor} roughness={0.4} metalness={0.6} />
+             </mesh>
+             {/* Lever Back */}
+             <mesh position={[-0.06, 0, -0.03]} castShadow>
+                 <boxGeometry args={[0.12, 0.015, 0.015]} />
+                 <meshStandardMaterial color={metalColor} roughness={0.4} metalness={0.6} />
+             </mesh>
+         </group>
+
        </group>
     </group>
   );
