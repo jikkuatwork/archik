@@ -141,6 +141,13 @@ function ProceduralWall({ wall, isDark }) {
     const endNode = nodes.find(n => n.id === wall.endNodeId);
     if (!startNode || !endNode) return null;
     
+    // Connection counts
+    const startCount = walls.filter(w => w.startNodeId === wall.startNodeId || w.endNodeId === wall.startNodeId).length;
+    const endCount = walls.filter(w => w.startNodeId === wall.endNodeId || w.endNodeId === wall.endNodeId).length;
+    
+    const skipStartCap = startCount > 1;
+    const skipEndCap = endCount > 1;
+    
     const wallLen = Math.hypot(endNode.x - startNode.x, endNode.y - startNode.y);
     
     // Sort Openings
@@ -196,13 +203,13 @@ function ProceduralWall({ wall, isDark }) {
     
     const addBlock = (t0, t1, yBottom, yTop) => {
       // Interpolate 2D corners at t0 and t1
-      // Right Face: p0 -> p2
-      const r0 = lerp(p0, p2, t0);
-      const r1 = lerp(p0, p2, t1);
+      // Right Face: p0 (StartRight) -> p1 (EndLeft = PhysRightEnd)
+      const r0 = lerp(p0, p1, t0);
+      const r1 = lerp(p0, p1, t1);
       
-      // Left Face: p3 -> p1
-      const l0 = lerp(p3, p1, t0);
-      const l1 = lerp(p3, p1, t1);
+      // Left Face: p3 (StartLeft) -> p2 (EndRight = PhysLeftEnd)
+      const l0 = lerp(p3, p2, t0);
+      const l1 = lerp(p3, p2, t1);
       
       // 3D Vertices (Y is up, Z is -y2d)
       // We need 8 corners for the block:
@@ -233,12 +240,19 @@ function ProceduralWall({ wall, isDark }) {
       pushQuad(br0, br1, tr1, tr0);
       // Left Side (l1 -> l0) -- Note direction for CCW normal
       pushQuad(bl1, bl0, tl0, tl1); // Wait, bl1->bl0 is right to left.
+      
       // Start Cap (at t0) - Normal pointing back?
-      // l0 -> r0
-      pushQuad(bl0, br0, tr0, tl0); 
+      // Render only if strictly internal (hole) OR if it's a loose end (no neighbors)
+      if (t0 > 0.001 || !skipStartCap) {
+         // l0 -> r0
+         pushQuad(bl0, br0, tr0, tl0); 
+      }
+      
       // End Cap (at t1) - Normal pointing forward?
-      // r1 -> l1
-      pushQuad(br1, bl1, tl1, tr1);
+      if (t1 < 0.999 || !skipEndCap) {
+         // r1 -> l1
+         pushQuad(br1, bl1, tl1, tr1);
+      }
     };
     
     segments.forEach(seg => {
