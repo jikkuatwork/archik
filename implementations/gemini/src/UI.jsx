@@ -3,7 +3,7 @@ import { useStore } from './store';
 import { 
   PenTool, MousePointer2, Trash2, AppWindow, DoorOpen, Download, Upload, Share2, 
   Sun, Moon, Lock, LockOpen, Repeat, Layers, Plus, Eye, EyeOff, ChevronUp, ChevronDown, Copy,
-  GripVertical, Fence, Settings, History, Save, Minus, RotateCcw
+  GripVertical, Fence, Settings, History, Save
 } from 'lucide-react';
 import { exportToJSON, importFromJSON, generateShareURL } from './persistence';
 import clsx from 'clsx';
@@ -155,7 +155,7 @@ export default function UI() {
     layers, activeLayerId, setAll,
     contextMenuData, theme, toggleTheme,
     setSelection, setContextMenuData,
-    projectMeta, viewState, setViewState
+    projectMeta
   } = useStore();
   
   // const { openings } = activeLayer; // Replaced by context logic below
@@ -364,25 +364,6 @@ export default function UI() {
           >
             {projectMeta?.title || "Untitled"}
           </button>
-
-          <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
-
-          {/* Zoom Controls */}
-          <ToolButton 
-             onClick={() => setViewState({ zoom: viewState.zoom / 1.2 })}
-             icon={<Minus size={20} />}
-             label="Zoom Out"
-          />
-          <ToolButton 
-             onClick={() => setViewState({ x: 0, y: 0, zoom: 1 })}
-             icon={<RotateCcw size={20} />}
-             label="Reset View"
-          />
-          <ToolButton 
-             onClick={() => setViewState({ zoom: viewState.zoom * 1.2 })}
-             icon={<Plus size={20} />}
-             label="Zoom In"
-          />
 
           <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
 
