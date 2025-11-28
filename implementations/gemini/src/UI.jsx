@@ -63,7 +63,9 @@ export default function UI() {
 
   return (
     <>
+      {/* Left Sidebar: Tools & Context */}
       <div className="absolute top-4 left-4 z-50 flex flex-col gap-2">
+        {/* Modes */}
         <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-white/20 dark:border-white/10 flex flex-col gap-2 transition-colors">
           <ToolButton 
             active={mode === 'IDLE' || mode === 'DRAGGING' || mode === 'SELECTING_RECT'} 
@@ -79,12 +81,55 @@ export default function UI() {
           />
         </div>
 
+        {/* Contextual Modifiers (Vertical) */}
+        {selectedWallIds.length === 1 && (
+          <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-white/20 dark:border-white/10 flex flex-col gap-2 transition-colors animate-in slide-in-from-left-2 duration-200">
+            <ToolButton 
+              active={hasWindow}
+              onClick={() => setWallOpening(selectedWallIds[0], hasWindow ? null : 'window')}
+              icon={<AppWindow size={20} />}
+              label="Window"
+            />
+            <ToolButton 
+              active={hasDoor}
+              onClick={() => setWallOpening(selectedWallIds[0], hasDoor ? null : 'door')}
+              icon={<DoorOpen size={20} />}
+              label="Door"
+            />
+            
+            {(hasWindow || hasDoor) && (
+              <>
+                <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
+                <ToolButton 
+                  onClick={() => toggleOpeningStatus(selectedWallIds[0])}
+                  icon={isOpen ? <LockOpen size={20} /> : <Lock size={20} />}
+                  label={isOpen ? "Close" : "Open"}
+                  active={isOpen}
+                />
+                <ToolButton 
+                  onClick={() => flipOpening(selectedWallIds[0])}
+                  icon={<Repeat size={20} />}
+                  label="Flip Dir"
+                />
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Delete / Clear */}
         <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-white/20 dark:border-white/10 flex flex-col gap-2 transition-colors">
-          <ToolButton 
-            onClick={() => exportToJSON({ nodes, walls, openings })}
-            icon={<Download size={20} />}
-            label="Export JSON"
+           <ToolButton 
+            onClick={handleDelete}
+            icon={<Trash2 size={20} />}
+            label={hasSelection ? "Delete" : "Reset"}
+            danger
           />
+        </div>
+      </div>
+
+      {/* Top Right Bar: System Actions */}
+      <div className="absolute top-4 right-4 z-50 flex flex-row gap-2">
+        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-white/20 dark:border-white/10 flex flex-row gap-2 transition-colors">
           <label className="cursor-pointer">
              <input type="file" accept=".json" onChange={handleImport} className="hidden" />
              <ToolButton 
@@ -94,7 +139,11 @@ export default function UI() {
               as="div"
              />
           </label>
-          
+          <ToolButton 
+            onClick={() => exportToJSON({ nodes, walls, openings })}
+            icon={<Download size={20} />}
+            label="Export JSON"
+          />
           <div className="relative group">
              <ToolButton 
               onClick={handleShare}
@@ -104,68 +153,63 @@ export default function UI() {
               className={isTooLarge ? "opacity-50 cursor-not-allowed" : ""}
             />
             {isTooLarge && (
-              <div className="absolute left-full top-0 ml-2 px-3 py-2 bg-red-800 text-white text-xs rounded shadow-lg w-32 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+              <div className="absolute right-0 top-full mt-2 px-3 py-2 bg-red-800 text-white text-xs rounded shadow-lg w-32 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
                 Plan is too large to share via URL. Use JSON Export.
               </div>
             )}
           </div>
-
-          <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
-
-           <ToolButton 
-            onClick={handleDelete}
-            icon={<Trash2 size={20} />}
-            label={hasSelection ? "Delete" : "Reset"}
-            danger
-          />
-        </div>
-        
-        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-white/20 dark:border-white/10 flex flex-col gap-2 transition-colors">
-           <ToolButton 
+          
+          <div className="w-px bg-gray-200 dark:bg-gray-700 mx-1" />
+          
+          <ToolButton 
             onClick={toggleTheme}
             icon={theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             label={theme === 'dark' ? "Light Mode" : "Dark Mode"}
           />
         </div>
       </div>
-      
-      {/* Context Menu */}
+
+      {/* Floating Context Menu (In addition to sidebar) */}
       {contextMenuData && selectedWallIds.length === 1 && (
         <div 
-          className="absolute z-50 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm p-2 rounded-xl shadow-xl border border-white/20 dark:border-white/10 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-150 transition-colors"
+          className="absolute z-50 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm p-2 rounded-xl shadow-xl border border-white/20 dark:border-white/10 flex flex-row items-center gap-2 animate-in fade-in zoom-in-95 duration-150 transition-colors"
           style={{ top: contextMenuData.y + 10, left: contextMenuData.x + 10 }}
         >
-          <ToolButton 
-            active={hasWindow}
-            onClick={() => setWallOpening(selectedWallIds[0], hasWindow ? null : 'window')}
-            icon={<AppWindow size={16} />}
-            label="Window"
-            className="w-full justify-start text-sm"
-          />
-          <ToolButton 
-            active={hasDoor}
-            onClick={() => setWallOpening(selectedWallIds[0], hasDoor ? null : 'door')}
-            icon={<DoorOpen size={16} />}
-            label="Door"
-            className="w-full justify-start text-sm"
-          />
+          <div className="flex flex-row gap-1">
+            <ToolButton 
+              active={hasWindow}
+              onClick={() => setWallOpening(selectedWallIds[0], hasWindow ? null : 'window')}
+              icon={<AppWindow size={16} />}
+              label="Window"
+              className="text-sm"
+            />
+            <ToolButton 
+              active={hasDoor}
+              onClick={() => setWallOpening(selectedWallIds[0], hasDoor ? null : 'door')}
+              icon={<DoorOpen size={16} />}
+              label="Door"
+              className="text-sm"
+            />
+          </div>
           
           {(hasWindow || hasDoor) && (
             <>
-              <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
-              <ToolButton 
-                onClick={() => toggleOpeningStatus(selectedWallIds[0])}
-                icon={isOpen ? <LockOpen size={16} /> : <Lock size={16} />}
-                label={isOpen ? "Close" : "Open"}
-                className="w-full justify-start text-sm"
-                active={isOpen}
-              />
-              <ToolButton 
-                onClick={() => flipOpening(selectedWallIds[0])}
-                icon={<Repeat size={16} />}
-                label="Flip Dir"
-                className="w-full justify-start text-sm"
-              />
+              <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+              <div className="flex flex-row gap-1">
+                <ToolButton 
+                  onClick={() => toggleOpeningStatus(selectedWallIds[0])}
+                  icon={isOpen ? <LockOpen size={16} /> : <Lock size={16} />}
+                  label={isOpen ? "Close" : "Open"}
+                  className="text-sm"
+                  active={isOpen}
+                />
+                <ToolButton 
+                  onClick={() => flipOpening(selectedWallIds[0])}
+                  icon={<Repeat size={16} />}
+                  label="Flip Dir"
+                  className="text-sm"
+                />
+              </div>
             </>
           )}
         </div>

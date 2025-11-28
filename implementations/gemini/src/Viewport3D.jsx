@@ -7,6 +7,39 @@ import { computeWallCorners } from './geometry';
 
 const WALL_HEIGHT = 2.5;
 
+const Sash = ({ width, sashH, glassThick, frameDepth, glassColor, frameColor }) => (
+  <group>
+    {/* Glass */}
+    <mesh castShadow receiveShadow>
+      <boxGeometry args={[width, sashH, glassThick]} />
+      <meshStandardMaterial 
+        color={glassColor} 
+        transparent 
+        opacity={0.3} 
+        roughness={0.1}
+        metalness={0.1}
+      />
+    </mesh>
+    {/* Frame Border */}
+    <mesh position={[0, sashH/2 - 0.02, 0]} castShadow receiveShadow>
+       <boxGeometry args={[width, 0.04, frameDepth - 0.05]} />
+       <meshStandardMaterial color={frameColor} />
+    </mesh>
+    <mesh position={[0, -sashH/2 + 0.02, 0]} castShadow receiveShadow>
+       <boxGeometry args={[width, 0.04, frameDepth - 0.05]} />
+       <meshStandardMaterial color={frameColor} />
+    </mesh>
+    <mesh position={[-width/2 + 0.02, 0, 0]} castShadow receiveShadow>
+       <boxGeometry args={[0.04, sashH, frameDepth - 0.05]} />
+       <meshStandardMaterial color={frameColor} />
+    </mesh>
+    <mesh position={[width/2 - 0.02, 0, 0]} castShadow receiveShadow>
+       <boxGeometry args={[0.04, sashH, frameDepth - 0.05]} />
+       <meshStandardMaterial color={frameColor} />
+    </mesh>
+  </group>
+);
+
 function Opening({ data, isDark }) {
   const { type, size, isOpen, isFlipped } = data;
   const [w, h, d] = size;
@@ -27,39 +60,6 @@ function Opening({ data, isDark }) {
     const angle = Math.PI / 3;
     const leftAngle = isFlipped ? -angle : angle;
     const rightAngle = isFlipped ? angle : -angle;
-
-    const Sash = ({ width }) => (
-      <group>
-        {/* Glass */}
-        <mesh castShadow receiveShadow>
-          <boxGeometry args={[width, sashH, glassThick]} />
-          <meshStandardMaterial 
-            color={glassColor} 
-            transparent 
-            opacity={0.3} 
-            roughness={0.1}
-            metalness={0.1}
-          />
-        </mesh>
-        {/* Frame Border */}
-        <mesh position={[0, sashH/2 - 0.02, 0]} castShadow receiveShadow>
-           <boxGeometry args={[width, 0.04, frameDepth - 0.05]} />
-           <meshStandardMaterial color={frameColor} />
-        </mesh>
-        <mesh position={[0, -sashH/2 + 0.02, 0]} castShadow receiveShadow>
-           <boxGeometry args={[width, 0.04, frameDepth - 0.05]} />
-           <meshStandardMaterial color={frameColor} />
-        </mesh>
-        <mesh position={[-width/2 + 0.02, 0, 0]} castShadow receiveShadow>
-           <boxGeometry args={[0.04, sashH, frameDepth - 0.05]} />
-           <meshStandardMaterial color={frameColor} />
-        </mesh>
-        <mesh position={[width/2 - 0.02, 0, 0]} castShadow receiveShadow>
-           <boxGeometry args={[0.04, sashH, frameDepth - 0.05]} />
-           <meshStandardMaterial color={frameColor} />
-        </mesh>
-      </group>
-    );
 
     return (
       <group position={data.pos} rotation={data.rot}>
@@ -85,14 +85,28 @@ function Opening({ data, isDark }) {
         {/* Left Sash */}
         <group position={[-w/2 + frameThick, 0, 0]} rotation={[0, isOpen ? leftAngle : 0, 0]}>
           <group position={[sashW/2, 0, 0]}>
-             <Sash width={sashW} />
+             <Sash 
+               width={sashW} 
+               sashH={sashH} 
+               glassThick={glassThick} 
+               frameDepth={frameDepth} 
+               glassColor={glassColor} 
+               frameColor={frameColor}
+             />
           </group>
         </group>
 
         {/* Right Sash */}
         <group position={[w/2 - frameThick, 0, 0]} rotation={[0, isOpen ? rightAngle : 0, 0]}>
           <group position={[-sashW/2, 0, 0]}>
-             <Sash width={sashW} />
+             <Sash 
+               width={sashW} 
+               sashH={sashH} 
+               glassThick={glassThick} 
+               frameDepth={frameDepth} 
+               glassColor={glassColor} 
+               frameColor={frameColor}
+             />
           </group>
         </group>
       </group>
@@ -136,7 +150,8 @@ function Opening({ data, isDark }) {
 }
 
 function ProceduralWall({ wall, isDark }) {
-  const { nodes, walls, openings } = useStore();
+  const { nodes, walls, openings, selectedWallIds, setSelection, setContextMenuData } = useStore();
+  const isSelected = selectedWallIds.includes(wall.id);
   
   const geometry = useMemo(() => {
     const corners = computeWallCorners(wall, nodes, walls);
@@ -334,8 +349,20 @@ function ProceduralWall({ wall, isDark }) {
 
   return (
     <group>
-      <mesh geometry={geometry} castShadow receiveShadow>
-        <meshStandardMaterial color={isDark ? "#e5e7eb" : "#ffffff"} roughness={0.8} />
+      <mesh 
+        geometry={geometry} 
+        castShadow 
+        receiveShadow
+        onClick={(e) => {
+          e.stopPropagation();
+          setSelection({ nodes: [], walls: [wall.id] });
+          setContextMenuData({ x: e.clientX, y: e.clientY });
+        }}
+      >
+        <meshStandardMaterial 
+          color={isSelected ? "#60a5fa" : (isDark ? "#e5e7eb" : "#ffffff")} 
+          roughness={0.8} 
+        />
       </mesh>
       {wallOpenings.map((op) => op && (
          <Opening key={op.id} data={op} isDark={isDark} />
@@ -345,13 +372,22 @@ function ProceduralWall({ wall, isDark }) {
 }
 
 export default function Viewport3D() {
-  const walls = useStore(state => state.walls);
-  const theme = useStore(state => state.theme);
+  const { walls, theme, setSelection, setContextMenuData } = useStore();
   const isDark = theme === 'dark';
 
   return (
     <div className="w-full h-full relative z-0">
-      <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 10, 10], fov: 45 }}>
+      <Canvas 
+        shadows 
+        dpr={[1, 2]} 
+        camera={{ position: [0, 10, 10], fov: 45 }}
+        onPointerMissed={(e) => {
+          if (e.type === 'click') {
+             setSelection({ nodes: [], walls: [] });
+             setContextMenuData(null);
+          }
+        }}
+      >
         <SoftShadows />
         <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2.1} />
         

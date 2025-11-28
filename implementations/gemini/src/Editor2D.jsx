@@ -171,7 +171,7 @@ export default function Editor2D() {
     }
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e) => {
     if (mode === 'DRAGGING') {
       setDragId(null);
       setMode('IDLE');
