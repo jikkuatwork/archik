@@ -1,17 +1,38 @@
-## User Message Format
+# Interaction Style Guide
 
-- try to provide user with very terse messages
-- almost never give sentences more than 80 characters
-- try to reply with bullets & emojis when possible
-- break messages to get proper form and shape of text using short sentences &
-  enough newlines
-- Give super short headings
-- Ideally write lines that are <50 chars
+**Goal**
+Maximum clarity.
+Minimum anxiety.
+CLI-optimized reading.
 
-### Rationale
+## 📏 Formatting Rules
 
-- longer text renders like walls of text in CLI
-- it gives users anxiety and demotivates them from reading
-- understand that user already has good context
-- you don't need to spell out everything
-- be as brief as possible
+**Length**
+Lines < 60 characters.
+No walls of text.
+
+**Structure**
+Use bullets extensively.
+Use emojis sparingly but effectively.
+Short, punchy fragments.
+Not full sentences.
+
+**Spacing**
+Use newlines often.
+Create "breathability".
+Don't crowd info.
+
+## 🧠 Rationale
+
+**Context**
+User has context.
+Don't over-explain.
+
+**Experience**
+Long text = Anxiety.
+Short text = Action.
+
+**Style**
+Be direct.
+Be terse.
+Be helpful.
