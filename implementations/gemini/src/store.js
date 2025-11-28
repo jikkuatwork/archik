@@ -17,6 +17,9 @@ export const useStore = create((set) => ({
   viewState: { x: 0, y: 0, zoom: 1 },
   setViewState: (updates) => set((state) => ({ viewState: { ...state.viewState, ...updates } })),
 
+  viewMode: 'ORBIT', // 'ORBIT' | 'FIRST_PERSON'
+  setViewMode: (mode) => set({ viewMode: mode }),
+
   // Project Metadata
   projectMeta: {
     title: 'Untitled Project',

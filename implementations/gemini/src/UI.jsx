@@ -356,7 +356,12 @@ export default function UI() {
       <div className="absolute top-4 right-4 z-50 flex flex-row gap-2">
         <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-white/20 dark:border-white/10 flex flex-row gap-2 transition-colors items-center">
           
-          {/* Project Title */}
+          <ToolButton 
+            onClick={() => setShowHistory(true)}
+            icon={<History size={20} />}
+            label="Versions"
+          />
+
           <button 
             onClick={() => setShowMeta(true)}
             className="px-3 py-2 mr-2 text-sm font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors truncate max-w-[150px]"
@@ -375,43 +380,41 @@ export default function UI() {
           
           <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
 
-          <label className="cursor-pointer">
-             <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-             <ToolButton 
-              onClick={() => {}} 
-              icon={<Upload size={20} />}
-              label="Import JSON"
-              as="div"
-             />
-          </label>
-          <ToolButton 
-            onClick={() => setShowHistory(true)}
-            icon={<History size={20} />}
-            label="Versions"
-          />
-          <ToolButton 
-            onClick={() => exportToJSON({ layers, activeLayerId, theme, viewState: useStore.getState().viewState, projectMeta, history: useStore.getState().history })}
-            icon={<Download size={20} />}
-            label="Export JSON"
-          />
-          <div className="relative group">
-             <ToolButton 
-              onClick={handleShare}
-              icon={<Share2 size={20} />}
-              label={shareUrl || "Share URL"}
-              disabled={isTooLarge}
-              className={isTooLarge ? "opacity-50 cursor-not-allowed" : ""}
+          {/* I/O Segment */}
+          <div className="flex flex-row gap-1">
+            <label className="cursor-pointer">
+              <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+              <ToolButton 
+                onClick={() => {}} 
+                icon={<Upload size={20} />}
+                label="Import JSON"
+                as="div"
+              />
+            </label>
+            <ToolButton 
+              onClick={() => exportToJSON({ layers, activeLayerId, theme, viewState: useStore.getState().viewState, projectMeta, history: useStore.getState().history })}
+              icon={<Download size={20} />}
+              label="Export JSON"
             />
-            {isTooLarge && (
-              <div className="absolute right-0 top-full mt-2 px-3 py-2 bg-red-800 text-white text-xs rounded shadow-lg w-32 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                Plan is too large to share via URL. Use JSON Export.
-              </div>
-            )}
-            {shareError && !isTooLarge && (
-              <div className="absolute right-0 top-full mt-2 px-3 py-2 bg-red-800 text-white text-xs rounded shadow-lg w-32 z-50 animate-in fade-in">
-                Failed to generate URL.
-              </div>
-            )}
+            <div className="relative group">
+              <ToolButton 
+                onClick={handleShare}
+                icon={<Share2 size={20} />}
+                label={shareUrl || "Share URL"}
+                disabled={isTooLarge}
+                className={isTooLarge ? "opacity-50 cursor-not-allowed" : ""}
+              />
+              {isTooLarge && (
+                <div className="absolute right-0 top-full mt-2 px-3 py-2 bg-red-800 text-white text-xs rounded shadow-lg w-32 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                  Plan is too large to share via URL. Use JSON Export.
+                </div>
+              )}
+              {shareError && !isTooLarge && (
+                <div className="absolute right-0 top-full mt-2 px-3 py-2 bg-red-800 text-white text-xs rounded shadow-lg w-32 z-50 animate-in fade-in">
+                  Failed to generate URL.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

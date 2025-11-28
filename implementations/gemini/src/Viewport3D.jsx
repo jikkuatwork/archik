@@ -1,11 +1,201 @@
-import React, { useMemo } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, SoftShadows, Edges } from '@react-three/drei';
+import React, { useMemo, useEffect, useRef, useState } from 'react';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
+import { OrbitControls, Environment, SoftShadows, PointerLockControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStore } from './store';
 import { computeWallCorners } from './geometry';
+import { Video, Footprints } from 'lucide-react';
+import clsx from 'clsx';
 
 const WALL_HEIGHT = 2.5;
+
+function ViewModeSelector() {
+  const { viewMode, setViewMode } = useStore();
+  
+  return (
+    <div className="flex bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-1 rounded-xl shadow-lg border border-white/20 dark:border-white/10 gap-1">
+       <button
+         onClick={() => setViewMode('ORBIT')}
+         className={clsx(
+           "p-2 rounded-lg flex items-center justify-center transition-all",
+           viewMode === 'ORBIT' 
+             ? "bg-blue-500 text-white shadow" 
+             : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+         )}
+         title="Orbit View"
+       >
+         <Video size={20} />
+       </button>
+       <button
+         onClick={() => setViewMode('FIRST_PERSON')}
+         className={clsx(
+           "p-2 rounded-lg flex items-center justify-center transition-all",
+           viewMode === 'FIRST_PERSON' 
+             ? "bg-blue-500 text-white shadow" 
+             : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+         )}
+         title="First Person (Walk)"
+       >
+         <Footprints size={20} />
+       </button>
+    </div>
+  );
+}
+
+// --- First Person Controller ---
+
+function FirstPersonController() {
+  const { camera } = useThree();
+  const [moveForward, setMoveForward] = useState(false);
+  const [moveBackward, setMoveBackward] = useState(false);
+  const [moveLeft, setMoveLeft] = useState(false);
+  const [moveRight, setMoveRight] = useState(false);
+  const [canJump, setCanJump] = useState(false);
+  
+  const velocity = useRef(new THREE.Vector3());
+  const direction = useRef(new THREE.Vector3());
+  const raycaster = useRef(new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, 2));
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      switch (event.code) {
+        case 'ArrowUp':
+        case 'KeyW':
+          setMoveForward(true);
+          break;
+        case 'ArrowLeft':
+        case 'KeyA':
+          setMoveLeft(true);
+          break;
+        case 'ArrowDown':
+        case 'KeyS':
+          setMoveBackward(true);
+          break;
+        case 'ArrowRight':
+        case 'KeyD':
+          setMoveRight(true);
+          break;
+        case 'Space':
+          if (canJump) velocity.current.y += 5; // Jump force
+          setCanJump(false);
+          break;
+      }
+    };
+
+    const onKeyUp = (event) => {
+      switch (event.code) {
+        case 'ArrowUp':
+        case 'KeyW':
+          setMoveForward(false);
+          break;
+        case 'ArrowLeft':
+        case 'KeyA':
+          setMoveLeft(false);
+          break;
+        case 'ArrowDown':
+        case 'KeyS':
+          setMoveBackward(false);
+          break;
+        case 'ArrowRight':
+        case 'KeyD':
+          setMoveRight(false);
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keyup', onKeyUp);
+    };
+  }, [canJump]);
+
+  useFrame((state, delta) => {
+    // Physics Logic
+    velocity.current.x -= velocity.current.x * 10.0 * delta;
+    velocity.current.z -= velocity.current.z * 10.0 * delta;
+    velocity.current.y -= 9.8 * 2.0 * delta; // Gravity
+
+    direction.current.z = Number(moveForward) - Number(moveBackward);
+    direction.current.x = Number(moveRight) - Number(moveLeft);
+    direction.current.normalize();
+
+    if (moveForward || moveBackward) velocity.current.z -= direction.current.z * 50.0 * delta;
+    if (moveLeft || moveRight) velocity.current.x -= direction.current.x * 50.0 * delta;
+
+    camera.translateX(-velocity.current.x * delta);
+    camera.translateZ(velocity.current.z * delta);
+    camera.position.y += velocity.current.y * delta;
+
+    // Floor Collision (Simple Plane at y=0)
+    // Eye height = 1.6 units
+    if (camera.position.y < 1.6) {
+      velocity.current.y = 0;
+      camera.position.y = 1.6;
+      setCanJump(true);
+    }
+  });
+
+  return <PointerLockControls />;
+}
+
+function SmartOrbitControls(props) {
+  const { gl } = useThree();
+  const controlsRef = useRef();
+
+  useEffect(() => {
+    if (!gl.domElement) return;
+
+    // Intercept pointer events to dynamically configure controls based on modifiers
+    const handlePointerDown = (e) => {
+      if (!controlsRef.current) return;
+      
+      const controls = controlsRef.current;
+      // Check for Shift key (robust check)
+      const isShift = e.shiftKey || (e.getModifierState && e.getModifierState('Shift'));
+
+      // Update Mouse mapping: Shift + Left -> Pan, Left -> Rotate
+      controls.mouseButtons.LEFT = isShift ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+      
+      // Update Touch mapping: Shift + 1-finger -> Pan, 1-finger -> Rotate
+      controls.touches.ONE = isShift ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE;
+    };
+
+    // Capture phase is critical: run this BEFORE OrbitControls' own listener
+    gl.domElement.addEventListener('pointerdown', handlePointerDown, { capture: true });
+    
+    const handleKeyChange = (e) => {
+        if (!controlsRef.current) return;
+        if (e.key === 'Shift') {
+            const isShift = e.type === 'keydown';
+            const controls = controlsRef.current;
+            controls.mouseButtons.LEFT = isShift ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+            controls.touches.ONE = isShift ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE;
+        }
+    };
+    
+    window.addEventListener('keydown', handleKeyChange);
+    window.addEventListener('keyup', handleKeyChange);
+
+    return () => {
+      gl.domElement.removeEventListener('pointerdown', handlePointerDown, { capture: true });
+      window.removeEventListener('keydown', handleKeyChange);
+      window.removeEventListener('keyup', handleKeyChange);
+    };
+  }, [gl.domElement]);
+
+  return (
+    <OrbitControls 
+      ref={controlsRef}
+      makeDefault 
+      minPolarAngle={0} 
+      maxPolarAngle={Math.PI / 2.1}
+      screenSpacePanning={true}
+      {...props} 
+    />
+  );
+}
 
 const Sash = ({ width, sashH, glassThick, frameDepth, glassColor, frameColor }) => (
   <group>
@@ -644,7 +834,7 @@ function Railing({ wall, layer, elevation, isDark }) {
 }
 
 export default function Viewport3D() {
-  const { layers, theme, setSelection, setContextMenuData } = useStore();
+  const { layers, theme, setSelection, setContextMenuData, viewMode } = useStore();
   const isDark = theme === 'dark';
 
   const visibleLayers = layers.filter(l => l.visible);
@@ -659,7 +849,12 @@ export default function Viewport3D() {
   }, [visibleLayers]);
 
   return (
-    <div className="w-full h-full relative z-0">
+    <div className="w-full h-full relative z-0 select-none">
+      {/* Overlay UI */}
+      <div className="absolute top-4 right-4 z-50">
+         <ViewModeSelector />
+      </div>
+
       <Canvas 
         shadows 
         dpr={[1, 2]} 
@@ -672,7 +867,8 @@ export default function Viewport3D() {
         }}
       >
         <SoftShadows />
-        <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2.1} />
+        
+        {viewMode === 'FIRST_PERSON' ? <FirstPersonController /> : <SmartOrbitControls />}
         
         <ambientLight intensity={isDark ? 0.4 : 0.6} />
         <directionalLight 
