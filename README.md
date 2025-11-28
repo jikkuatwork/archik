@@ -1,51 +1,103 @@
 # 🏰 Archik
 
-**Built with Gemini 3.0** | *The effortless way to dream up spaces.*
+**Built with Gemini 3.0**
+*The effortless way to dream up spaces.*
 
 [**🚀 Live Demo**](https://archik.vercel.app/)
 
 ---
 
-Welcome to **Archik**, a fun side project born from the desire to make drawing floor plans as easy as doodling on a napkin—but with superpowers.
+**Welcome to Archik**
 
-Forget complex CAD tools that require a PhD to operate. Archik is about **flow**. You draw a line, it becomes a wall. You click a wall, it gets a window. You share a link, and your friend sees your masterpiece instantly. 
+A fun side project.
+Make drawing floor plans easy.
+Like doodling, but with superpowers.
+No PhD required.
+It's about **flow**.
 
-It's effortless, it's instant, and it's surprisingly powerful.
+Draw a line -> It's a wall.
+Click a wall -> Add a window.
+Share a link -> Instant view.
 
-## ✨ Features that Spark Joy
+Effortless. Instant. Powerful.
 
-*   **⚡ Lightning Fast Drawing**: Click to start, click to end. Snapping happens automatically. It feels like magic.
-*   **🧊 Instant 3D**: Watch your 2D sketch rise into a beautiful 3D model in real-time. No rendering times, no waiting.
-*   **👁️ Walkthrough Walls**: Punch holes for windows and doors automatically. Walls have thickness, volume, and you can literally look through them.
-*   **🌙 Dark Mode**: A sleek, dark interface for late-night architectural inspirations. Toggle it with a click.
-*   **🖱️ Smart Context Menu**: Select a wall, and the tools appear right next to your cursor. Add windows, doors, or even open/close them with animations.
-*   **📐 Infinite Canvas**: Pan with two fingers (or scroll wheel) and drag your plan anywhere. There are no boundaries to your creativity.
-*   **🪄 URL Sharing**: Send your entire floor plan to a friend just by copying the URL. We use some serious compression wizardry to fit your house in a link.
-*   **💾 JSON Export/Import**: Want to save your work for later? Download it as a JSON file and load it back up whenever inspiration strikes.
-*   **📦 Box Selection**: Drag a box to select multiple walls and delete them all at once. Satisfyingly destructive.
+## ✨ Features
+
+**⚡ Lightning Fast**
+Click to start, click to end.
+Auto-snapping.
+Feels like magic.
+
+**🧊 Instant 3D**
+2D sketch to 3D model.
+Real-time updates.
+No rendering waits.
+
+**👁️ Windows & Doors**
+Punch holes automatically.
+Walls have thickness.
+Look right through them.
+
+**🌙 Dark Mode**
+Sleek interface.
+Late-night inspiration.
+Toggle with a click.
+
+**🖱️ Smart Context**
+Select a wall.
+Tools appear right there.
+Add/animate openings.
+
+**📐 Infinite Canvas**
+Pan and drag anywhere.
+No boundaries.
+
+**🪄 URL Sharing**
+Copy the URL.
+Share your plan instantly.
+Compression wizardry included.
+
+**💾 JSON I/O**
+Save your work.
+Load it back anytime.
+
+**📦 Box Selection**
+Drag to select.
+Delete multiple items.
+Satisfyingly destructive.
 
 ## 🛠️ Tech Stack
 
-Built with love and some very cool libraries:
+**React 19**
+The UI engine.
 
-*   **React 19** - The UI engine.
-*   **React Three Fiber (R3F)** - The 3D magic.
-*   **Zustand** - State management that stays out of your way.
-*   **Tailwind CSS** - Styling that just works.
-*   **Vite** - Because waiting for builds is so 2020.
-*   **LZ-String** - The secret sauce behind our shareable URLs.
+**React Three Fiber (R3F)**
+The 3D magic.
+
+**Zustand**
+Simple state management.
+
+**Tailwind CSS**
+Styling that works.
+
+**Vite**
+Fast builds.
+
+**LZ-String**
+Shareable URLs.
 
 ## 🚀 Getting Started
 
-1.  Clone the repo.
-2.  Navigate to the implementation: `cd implementations/gemini`
-3.  Install dependencies: `npm install`
-4.  Run the dev server: `npm run dev`
-5.  Start building!
+1. Clone the repo.
+2. `cd implementations/gemini`
+3. `npm install`
+4. `npm run dev`
+5. Start building!
 
 ## 📜 License
 
-MIT License. Go wild, build something cool, and maybe share it with us!
+MIT License.
+Go wild. Build something cool.
 
 ---
 
