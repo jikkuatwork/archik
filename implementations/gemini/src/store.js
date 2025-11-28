@@ -12,6 +12,50 @@ export const useStore = create((set) => ({
   selectedWallIds: [],
   contextMenuData: null,
   theme: typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+  
+  // 2D View State
+  viewState: { x: 0, y: 0, zoom: 1 },
+  setViewState: (updates) => set((state) => ({ viewState: { ...state.viewState, ...updates } })),
+
+  // Project Metadata
+  projectMeta: {
+    title: 'Untitled Project',
+    description: '',
+    author: 'Anonymous',
+    created: Date.now(),
+    modified: Date.now()
+  },
+  setProjectMeta: (updates) => set((state) => ({ projectMeta: { ...state.projectMeta, ...updates, modified: Date.now() } })),
+
+  // Version History
+  history: [],
+  createSnapshot: (label) => set((state) => {
+    const snapshot = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      label: label || `Version ${state.history.length + 1}`,
+      data: {
+        layers: state.layers,
+        activeLayerId: state.activeLayerId,
+        projectMeta: state.projectMeta
+      }
+    };
+    return { history: [snapshot, ...state.history] };
+  }),
+  restoreSnapshot: (id) => set((state) => {
+    const snapshot = state.history.find(h => h.id === id);
+    if (!snapshot) return state;
+    return {
+      layers: snapshot.data.layers,
+      activeLayerId: snapshot.data.activeLayerId,
+      projectMeta: snapshot.data.projectMeta,
+      selectedNodeIds: [],
+      selectedWallIds: []
+    };
+  }),
+  deleteSnapshot: (id) => set((state) => ({
+    history: state.history.filter(h => h.id !== id)
+  })),
 
   // Layers System
   activeLayerId: DEFAULT_LAYER_ID,
@@ -251,7 +295,8 @@ export const useStore = create((set) => ({
             height: type === 'door' ? 2.2 : 1.2,
             y: type === 'door' ? 0 : 0.9,
             isOpen: false,
-            isFlipped: false
+            isFlipped: false,
+            assetId: 'standard'
           }] 
         } : l)
       };
@@ -278,7 +323,8 @@ export const useStore = create((set) => ({
           height: type === 'door' ? 2.2 : 1.2,
           y: type === 'door' ? 0 : 0.9,
           isOpen: false,
-          isFlipped: false
+          isFlipped: false,
+          assetId: 'standard'
         };
         newOpenings = [...cleanOpenings, newOpening];
       }
@@ -379,6 +425,15 @@ export const useStore = create((set) => ({
       openings: data.openings || [] 
     }],
     activeLayerId: data.activeLayerId || DEFAULT_LAYER_ID,
+    viewState: data.viewState || { x: 0, y: 0, zoom: 1 },
+    projectMeta: data.projectMeta || {
+      title: 'Untitled Project',
+      description: '',
+      author: 'Anonymous',
+      created: Date.now(),
+      modified: Date.now()
+    },
+    history: data.history || [],
     mode: 'IDLE',
     selectedNodeIds: [],
     selectedWallIds: [],
@@ -400,6 +455,15 @@ export const useStore = create((set) => ({
       openings: []
     }],
     activeLayerId: DEFAULT_LAYER_ID,
+    viewState: { x: 0, y: 0, zoom: 1 },
+    projectMeta: {
+      title: 'Untitled Project',
+      description: '',
+      author: 'Anonymous',
+      created: Date.now(),
+      modified: Date.now()
+    },
+    history: [],
     mode: 'IDLE',
     drawingStartNode: null,
     hoveredNodeId: null,

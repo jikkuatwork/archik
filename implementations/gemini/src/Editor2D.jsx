@@ -1,439 +1,354 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useStore } from './store';
-import { distToSegment } from './geometry';
-
-const SCALE = 50;
 
 export default function Editor2D() {
   const { 
     layers, activeLayerId, mode, 
     addNode, addWall, updateNode, 
-    hoveredNodeId, setHoveredNodeId, 
-    hoveredWallId, setHoveredWallId,
-    selectedNodeIds, selectedWallIds, setSelection,
-    setMode, drawingStartNode, setDrawingStartNode,
-    setContextMenuData, theme, setActiveLayer
+    hoveredNodeId, hoveredWallId, setHoveredNodeId,
+    selectedNodeIds, selectedWallIds, setSelection, setContextMenuData,
+    drawingStartNode, setDrawingStartNode,
+    viewState, setViewState
   } = useStore();
-  
-  // Auto-fix activeLayerId if invalid
-  useEffect(() => {
-    if (layers.length > 0 && !layers.find(l => l.id === activeLayerId)) {
-      setActiveLayer(layers[0].id);
-    }
-  }, [layers, activeLayerId, setActiveLayer]);
 
-  const activeLayer = layers.find(l => l.id === activeLayerId) || { nodes: [], walls: [], openings: [] };
-  const { nodes, walls } = activeLayer; // For interaction logic only
-
-  const containerRef = useRef(null);
+  const svgRef = useRef(null);
+  const [dragStart, setDragStart] = useState(null); // For node dragging
+  const [panStart, setPanStart] = useState(null); // For canvas panning
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); // World coordinates
   const [dimensions, setDimensions] = useState({ w: 0, h: 0 });
-  const [dragId, setDragId] = useState(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); // World coords
-  const [selectionStart, setSelectionStart] = useState(null); // World coords
-  const [pan, setPan] = useState({ x: 0, y: 0 }); // Screen pixels
-  
-  // Theme Colors
-  const isDark = theme === 'dark';
-  const gridColor = isDark ? "#334155" : "#e5e5e5"; // Slate-700 vs Gray-200
-  const wallColorDefault = isDark ? "#94a3b8" : "#94a3b8"; 
-  const wallColorHover = isDark ? "#cbd5e1" : "#64748b";
-  const nodeColorDefault = isDark ? "#e2e8f0" : "#1e293b";
-  const nodeStroke = isDark ? "#0f172a" : "white";
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setDimensions({ 
-          w: entry.contentRect.width, 
-          h: entry.contentRect.height 
-        });
+    const updateSize = () => {
+      if (svgRef.current) {
+        setDimensions({ w: svgRef.current.clientWidth, h: svgRef.current.clientHeight });
       }
-    });
-    
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
+    };
+    window.addEventListener('resize', updateSize);
+    updateSize(); // Initial
+    return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  const toScreen = (x, y) => ({
-    x: dimensions.w / 2 + x * SCALE + pan.x,
-    y: dimensions.h / 2 - y * SCALE + pan.y
-  });
-  
-  const toWorld = (clientX, clientY) => {
-    if (!containerRef.current) return { x: 0, y: 0 };
-    const rect = containerRef.current.getBoundingClientRect();
-    const sx = clientX - rect.left - pan.x;
-    const sy = clientY - rect.top - pan.y;
+  const activeLayer = layers.find(l => l.id === activeLayerId);
+  const nodes = activeLayer?.nodes || [];
+  const walls = activeLayer?.walls || [];
+  const openings = activeLayer?.openings || [];
+
+  // Onion Skin Layers (Visible but not active)
+  const backgroundLayers = layers.filter(l => l.visible && l.id !== activeLayerId);
+
+  // --- Coordinate Transforms ---
+  const toWorld = useCallback((clientX, clientY) => {
+    if (!svgRef.current) return { x: 0, y: 0 };
+    const rect = svgRef.current.getBoundingClientRect();
+    const rawX = clientX - rect.left - rect.width / 2;
+    const rawY = clientY - rect.top - rect.height / 2;
     return {
-      x: (sx - dimensions.w / 2) / SCALE,
-      y: -(sy - dimensions.h / 2) / SCALE
+      x: (rawX - viewState.x) / (50 * viewState.zoom),
+      y: (rawY - viewState.y) / (50 * viewState.zoom)
     };
-  };
+  }, [viewState]);
 
+  // --- Navigation Handlers ---
+  const handleWheel = useCallback((e) => {
+    e.preventDefault();
+    if (e.ctrlKey || e.metaKey) {
+      // Zoom
+      const zoomSensitivity = 0.001;
+      const newZoom = Math.max(0.1, Math.min(5, viewState.zoom - e.deltaY * zoomSensitivity));
+      setViewState({ zoom: newZoom });
+    } else {
+      // Pan (Trackpad or Mouse Wheel)
+      setViewState({ 
+        x: viewState.x - e.deltaX,
+        y: viewState.y - e.deltaY 
+      });
+    }
+  }, [viewState, setViewState]);
+  
+  // Attach non-passive wheel listener
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    
-    const onWheel = (e) => {
-      e.preventDefault();
-      setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
-    };
-    
-    container.addEventListener('wheel', onWheel, { passive: false });
-    return () => container.removeEventListener('wheel', onWheel);
-  }, []);
+     const el = svgRef.current;
+     if (el) {
+        el.addEventListener('wheel', handleWheel, { passive: false });
+        return () => el.removeEventListener('wheel', handleWheel);
+     }
+  }, [handleWheel]);
 
   const handlePointerDown = (e) => {
-    if (e.button !== 0) return;
-    const { x, y } = toWorld(e.clientX, e.clientY);
+    const worldPos = toWorld(e.clientX, e.clientY);
+    
+    // Middle Mouse or Space+Click -> Pan
+    if (e.button === 1 || (e.button === 0 && e.getModifierState("Space"))) {
+       setPanStart({ x: e.clientX, y: e.clientY, viewX: viewState.x, viewY: viewState.y });
+       return;
+    }
+    
+    if (e.button !== 0) return; // Only Left Click for tools
 
-    if (mode === 'DRAWING') {
-      if (hoveredNodeId) {
-        if (drawingStartNode) {
-          if (drawingStartNode !== hoveredNodeId) {
-            addWall(drawingStartNode, hoveredNodeId);
-            setDrawingStartNode(hoveredNodeId); 
+    // ... (rest of tool logic)
+    
+    // Check Node Hit
+    const hitNode = nodes.find(n => Math.hypot(n.x - worldPos.x, n.y - worldPos.y) < 0.2 / viewState.zoom); // Dynamic hit radius
+    
+    if (mode === 'IDLE') {
+       if (hitNode) {
+         setSelection({ nodes: [hitNode.id], walls: [] });
+         setContextMenuData({ x: e.clientX, y: e.clientY });
+         setDragStart({ id: hitNode.id, startX: hitNode.x, startY: hitNode.y });
+         e.stopPropagation();
+       } else {
+          // Check Wall Hit
+          // Simple distance check to line segments
+          let bestWall = null;
+          let minDst = 0.2 / viewState.zoom;
+          
+          walls.forEach(w => {
+             const start = nodes.find(n => n.id === w.startNodeId);
+             const end = nodes.find(n => n.id === w.endNodeId);
+             if (!start || !end) return;
+             
+             // Point to segment distance
+             const A = worldPos.x - start.x;
+             const B = worldPos.y - start.y;
+             const C = end.x - start.x;
+             const D = end.y - start.y;
+             
+             const dot = A * C + B * D;
+             const lenSq = C * C + D * D;
+             let param = -1;
+             if (lenSq !== 0) param = dot / lenSq;
+             
+             let xx, yy;
+             if (param < 0) { xx = start.x; yy = start.y; }
+             else if (param > 1) { xx = end.x; yy = end.y; }
+             else { xx = start.x + param * C; yy = start.y + param * D; }
+             
+             const dx = worldPos.x - xx;
+             const dy = worldPos.y - yy;
+             const dst = Math.sqrt(dx * dx + dy * dy);
+             
+             if (dst < minDst) {
+                minDst = dst;
+                bestWall = w;
+             }
+          });
+          
+          if (bestWall) {
+             setSelection({ nodes: [], walls: [bestWall.id] });
+             setContextMenuData({ x: e.clientX, y: e.clientY });
+          } else {
+             setSelection({ nodes: [], walls: [] });
+             setContextMenuData(null);
           }
-        } else {
-          setDrawingStartNode(hoveredNodeId);
-        }
-      } else {
-        const snapX = Math.round(x * 10) / 10;
-        const snapY = Math.round(y * 10) / 10;
-        
-        const newNodeId = addNode(snapX, snapY);
-        
-        if (drawingStartNode) {
-          addWall(drawingStartNode, newNodeId);
-        }
-        setDrawingStartNode(newNodeId);
-      }
-    } else {
-      // IDLE mode
-      if (hoveredNodeId) {
-         setDragId(hoveredNodeId);
-         setMode('DRAGGING');
-         setContextMenuData(null); // Clear menu when interacting
-         if (!selectedNodeIds.includes(hoveredNodeId)) {
-            setSelection({ nodes: [hoveredNodeId], walls: [] });
-         }
-      } else if (hoveredWallId) {
-         setSelection({ nodes: [], walls: [hoveredWallId] });
-         setContextMenuData({ x: e.clientX, y: e.clientY, worldX: x, worldY: y });
-      } else {
-         // Start Selection Box
-         setSelectionStart({ x, y });
-         setMode('SELECTING_RECT');
-         setSelection({ nodes: [], walls: [] });
-         setContextMenuData(null);
-      }
+       }
+    } else if (mode === 'DRAWING') {
+       // ... Drawing logic
+       let targetId = hitNode ? hitNode.id : null;
+       
+       if (!targetId) {
+          // Snap to grid/axis?
+          // For now just add node
+          targetId = addNode(worldPos.x, worldPos.y);
+       }
+       
+       if (!drawingStartNode) {
+          setDrawingStartNode(targetId);
+       } else {
+          addWall(drawingStartNode, targetId);
+          setDrawingStartNode(targetId); // Continue chain
+       }
     }
   };
 
   const handlePointerMove = (e) => {
-    const { x, y } = toWorld(e.clientX, e.clientY);
-    setMousePos({ x, y });
-
-    if (dragId) {
-      updateNode(dragId, x, y);
-      if (hoveredNodeId !== dragId) setHoveredNodeId(dragId);
-      // Ensure menu is gone
-      setContextMenuData(null);
-      return;
+    // Panning
+    if (panStart) {
+       const dx = e.clientX - panStart.x;
+       const dy = e.clientY - panStart.y;
+       setViewState({ x: panStart.viewX + dx, y: panStart.viewY + dy });
+       return;
     }
 
-    if (mode === 'SELECTING_RECT') {
-      // Just updating mousePos is enough for render
-      return;
-    }
+    const worldPos = toWorld(e.clientX, e.clientY);
+    setMousePos(worldPos);
 
-    // Hover check Node
-    let foundNode = null;
-    for (const n of nodes) {
-      const s = toScreen(n.x, n.y);
-      if (!containerRef.current) break;
-      const rect = containerRef.current.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      
-      const dist = Math.hypot(mx - s.x, my - s.y);
-      if (dist < 15) { 
-        foundNode = n.id;
-        break;
-      }
+    if (dragStart) {
+       updateNode(dragStart.id, worldPos.x, worldPos.y);
     }
-    setHoveredNodeId(foundNode);
-
-    // Hover check Wall
-    if (!foundNode) {
-      let foundWall = null;
-      let minDst = Infinity;
-      for (const w of walls) {
-        const start = nodes.find(n => n.id === w.startNodeId);
-        const end = nodes.find(n => n.id === w.endNodeId);
-        if (!start || !end) continue;
-        
-        const d = distToSegment({x, y}, start, end); 
-        if (d < 10 / SCALE) {
-          if (d < minDst) {
-            minDst = d;
-            foundWall = w.id;
-          }
-        }
-      }
-      setHoveredWallId(foundWall);
-    } else {
-      setHoveredWallId(null);
-    }
+    
+    // Hover logic
+    const hitNode = nodes.find(n => Math.hypot(n.x - worldPos.x, n.y - worldPos.y) < 0.2 / viewState.zoom);
+    setHoveredNodeId(hitNode ? hitNode.id : null);
   };
 
-  const handlePointerUp = (e) => {
-    if (mode === 'DRAGGING') {
-      setDragId(null);
-      setMode('IDLE');
-    } else if (mode === 'SELECTING_RECT' && selectionStart) {
-      // Calculate Selection
-      const minX = Math.min(selectionStart.x, mousePos.x);
-      const maxX = Math.max(selectionStart.x, mousePos.x);
-      const minY = Math.min(selectionStart.y, mousePos.y);
-      const maxY = Math.max(selectionStart.y, mousePos.y);
-
-      const selNodes = nodes.filter(n => 
-        n.x >= minX && n.x <= maxX && n.y >= minY && n.y <= maxY
-      ).map(n => n.id);
-
-      // Select walls if both points are inside OR if it intersects?
-      // Let's do: If BOTH points inside, strictly enclosed.
-      const selWalls = walls.filter(w => {
-        const s = nodes.find(n => n.id === w.startNodeId);
-        const e = nodes.find(n => n.id === w.endNodeId);
-        if (!s || !e) return false;
-        return (
-          s.x >= minX && s.x <= maxX && s.y >= minY && s.y <= maxY &&
-          e.x >= minX && e.x <= maxX && e.y >= minY && e.y <= maxY
-        );
-      }).map(w => w.id);
-
-      setSelection({ nodes: selNodes, walls: selWalls });
-      if (selWalls.length > 0) {
-        setContextMenuData({ x: e.clientX, y: e.clientY, worldX: mousePos.x, worldY: mousePos.y });
-      } else {
-        setContextMenuData(null);
-      }
-      setMode('IDLE');
-      setSelectionStart(null);
-    }
+  const handlePointerUp = () => {
+    setDragStart(null);
+    setPanStart(null);
   };
   
   const handleContextMenu = (e) => {
     e.preventDefault();
-    if (mode === 'DRAWING') {
-      setDrawingStartNode(null);
-      setMode('IDLE');
-    }
+    setContextMenuData({ x: e.clientX, y: e.clientY });
   };
 
-  // Render Selection Rect
-  let selectionRect = null;
-  if (mode === 'SELECTING_RECT' && selectionStart) {
-    const s = toScreen(selectionStart.x, selectionStart.y);
-    const e = toScreen(mousePos.x, mousePos.y);
-    const x = Math.min(s.x, e.x);
-    const y = Math.min(s.y, e.y);
-    const w = Math.abs(s.x - e.x);
-    const h = Math.abs(s.y - e.y);
-    
-    selectionRect = (
-      <rect 
-        x={x} y={y} width={w} height={h} 
-        fill="rgba(59, 130, 246, 0.1)" 
-        stroke="#3b82f6" 
-        strokeWidth="1" 
-        strokeDasharray="4 4" 
-      />
-    );
-  }
-
-  let previewLine = null;
-  if (mode === 'DRAWING' && drawingStartNode) {
-    const startNode = nodes.find(n => n.id === drawingStartNode);
-    if (startNode) {
-      const s = toScreen(startNode.x, startNode.y);
-      let endX = mousePos.x;
-      let endY = mousePos.y;
-      
-      if (hoveredNodeId) {
-        const hNode = nodes.find(n => n.id === hoveredNodeId);
-        if (hNode) {
-          endX = hNode.x;
-          endY = hNode.y;
-        }
-      } else {
-          endX = Math.round(endX * 10) / 10;
-          endY = Math.round(endY * 10) / 10;
-      }
-      
-      const ePos = toScreen(endX, endY);
-      
-      previewLine = (
-        <line 
-          x1={s.x} y1={s.y} 
-          x2={ePos.x} y2={ePos.y} 
-          stroke="#3b82f6" 
-          strokeWidth="2" 
-          strokeDasharray="4 4" 
-        />
-      );
-    }
+  // Grid Rendering
+  const gridSize = 100;
+  const gridLines = [];
+  for (let i = -gridSize; i <= gridSize; i++) {
+     gridLines.push(<line key={`v${i}`} x1={i} y1={-gridSize} x2={i} y2={gridSize} stroke="#ddd" strokeWidth={0.02} />);
+     gridLines.push(<line key={`h${i}`} x1={-gridSize} y1={i} x2={gridSize} y2={i} stroke="#ddd" strokeWidth={0.02} />);
   }
 
   return (
-    <div ref={containerRef} className="w-full h-full relative overflow-hidden bg-white dark:bg-gray-950 select-none">
+    <div className="w-full h-full bg-[#f9fafb] dark:bg-[#111827] overflow-hidden relative cursor-crosshair">
       <svg 
-        className="w-full h-full pointer-events-auto block"
+        ref={svgRef}
+        className="w-full h-full touch-none"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
         onContextMenu={handleContextMenu}
       >
-        <defs>
-          <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse" patternTransform={`translate(${pan.x},${pan.y})`}>
-             <path d="M 50 0 L 0 0 0 50" fill="none" stroke={gridColor} strokeWidth="1"/>
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grid)" />
-
-        {/* Render Layers */}
-        {layers.map(layer => {
-          if (!layer.visible) return null;
-          const isActive = layer.id === activeLayerId;
-          const layerOpacity = isActive ? 1.0 : 0.2;
-          const isInteractable = isActive ? "auto" : "none";
-
-          return (
-            <g key={layer.id} style={{ opacity: layerOpacity, pointerEvents: isInteractable }}>
-              {/* Walls */}
+        <g transform={`translate(${viewState.x + dimensions.w/2}, ${viewState.y + dimensions.h/2}) scale(${50 * viewState.zoom})`}>
+          {/* Background Layers (Onion Skin) */}
+          {backgroundLayers.map(layer => (
+            <g key={layer.id} opacity={0.3} pointerEvents="none" className="grayscale">
               {layer.walls.map(wall => {
-                const startNode = layer.nodes.find(n => n.id === wall.startNodeId);
-                const endNode = layer.nodes.find(n => n.id === wall.endNodeId);
-                if (!startNode || !endNode) return null;
-                
-                const dx = endNode.x - startNode.x;
-                const dy = endNode.y - startNode.y;
-                const wallLen = Math.hypot(dx, dy);
-
-                const s = toScreen(startNode.x, startNode.y);
-                const e = toScreen(endNode.x, endNode.y);
-
-                const isHovered = isActive && hoveredWallId === wall.id;
-                const isSelected = isActive && selectedWallIds.includes(wall.id);
-                
-                const strokeColor = isSelected ? "#3b82f6" : (isHovered ? wallColorHover : wallColorDefault);
-                const opacity = isSelected || isHovered ? 1.0 : 0.5;
-
-                // Openings
-                const wallOpenings = layer.openings
-                  .filter(o => o.wallId === wall.id && wallLen >= o.width + 0.2)
-                  .map(op => {
-                   const cx = startNode.x + dx * op.dist;
-                   const cy = startNode.y + dy * op.dist;
-                   
-                   const ux = dx / wallLen;
-                   const uy = dy / wallLen;
-                   
-                   const w2 = op.width / 2;
-                   const x1 = cx - ux * w2;
-                   const y1 = cy - uy * w2;
-                   const x2 = cx + ux * w2;
-                   const y2 = cy + uy * w2;
-                   
-                   const p1 = toScreen(x1, y1);
-                   const p2 = toScreen(x2, y2);
-
-                   const cutLine = (
-                     <line 
-                       x1={p1.x} y1={p1.y}
-                       x2={p2.x} y2={p2.y}
-                       stroke={isDark ? "#0f172a" : "white"}
-                       strokeWidth={(wall.thickness * SCALE) - 2}
-                       strokeLinecap="butt"
-                     />
-                   );
-
-                   if (op.type === 'window') {
-                      return (
-                         <g key={op.id}>
-                            {cutLine}
-                            <line 
-                              x1={p1.x} y1={p1.y}
-                              x2={p2.x} y2={p2.y}
-                              stroke="#60a5fa" 
-                              strokeWidth={(wall.thickness * SCALE) - 2}
-                              strokeOpacity="0.3"
-                              strokeLinecap="butt"
-                            />
-                         </g>
-                      );
-                   } else if (op.type === 'door') {
-                      return (
-                         <g key={op.id}>
-                            {cutLine}
-                            <line 
-                              x1={p1.x} y1={p1.y}
-                              x2={p2.x} y2={p2.y}
-                              stroke="#fb923c" 
-                              strokeWidth={(wall.thickness * SCALE) - 2}
-                              strokeOpacity="0.3"
-                              strokeLinecap="butt"
-                            />
-                         </g>
-                      );
-                   }
-                   return <g key={op.id}>{cutLine}</g>;
-                });
-
+                const start = layer.nodes.find(n => n.id === wall.startNodeId);
+                const end = layer.nodes.find(n => n.id === wall.endNodeId);
+                if (!start || !end) return null;
                 return (
-                  <g key={wall.id}>
-                    <line 
-                      x1={s.x} y1={s.y} x2={e.x} y2={e.y}
-                      stroke={strokeColor}
-                      strokeWidth={wall.thickness * SCALE}
-                      strokeLinecap="round"
-                      className="transition-colors duration-150"
-                      style={{ opacity }}
-                    />
-                    {wallOpenings}
-                  </g>
+                   <line 
+                     key={wall.id}
+                     x1={start.x} y1={start.y}
+                     x2={end.x} y2={end.y}
+                     stroke="black"
+                     strokeWidth={wall.thickness}
+                     strokeLinecap="round"
+                     className="dark:stroke-gray-400"
+                   />
                 );
               })}
-
-              {/* Nodes */}
-              {layer.nodes.map(node => {
-                 const s = toScreen(node.x, node.y);
-                 const isStart = isActive && node.id === drawingStartNode;
-                 const isSelected = isActive && selectedNodeIds.includes(node.id);
-                 
-                 return (
-                   <circle 
-                     key={node.id} 
-                     cx={s.x} 
-                     cy={s.y} 
-                     r={isStart ? 8 : 6} 
-                     fill={(isActive && (hoveredNodeId === node.id || dragId === node.id || isStart || isSelected)) ? "#3b82f6" : nodeColorDefault}
-                     stroke={nodeStroke}
-                     strokeWidth="2"
-                     className="cursor-pointer transition-colors"
-                   />
-                 );
-              })}
+              {layer.nodes.map(node => (
+                 <circle 
+                   key={node.id}
+                   cx={node.x} cy={node.y}
+                   r={0.15}
+                   fill="white"
+                   stroke="gray"
+                   strokeWidth={0.05}
+                 />
+              ))}
             </g>
-          );
-        })}
-        
-        {previewLine}
-        {selectionRect}
+          ))}
+
+          {/* Grid */}
+          <g className="dark:opacity-10">{gridLines}</g>
+          
+          {/* Walls */}
+          {walls.map(wall => {
+            const start = nodes.find(n => n.id === wall.startNodeId);
+            const end = nodes.find(n => n.id === wall.endNodeId);
+            if (!start || !end) return null;
+            
+            const isSelected = selectedWallIds.includes(wall.id);
+            const isHovered = hoveredWallId === wall.id;
+            
+            return (
+               <line 
+                 key={wall.id}
+                 x1={start.x} y1={start.y}
+                 x2={end.x} y2={end.y}
+                 stroke={isSelected ? "#3b82f6" : (isHovered ? "#6b7280" : "black")}
+                 strokeWidth={wall.thickness}
+                 strokeLinecap="round"
+                 className="dark:stroke-gray-300 transition-colors"
+               />
+            );
+          })}
+
+          {/* Openings */}
+          {openings.map(opening => {
+            const wall = walls.find(w => w.id === opening.wallId);
+            if (!wall) return null;
+            
+            const start = nodes.find(n => n.id === wall.startNodeId);
+            const end = nodes.find(n => n.id === wall.endNodeId);
+            if (!start || !end) return null;
+
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const angleDeg = Math.atan2(dy, dx) * (180 / Math.PI);
+            
+            const cx = start.x + dx * opening.dist;
+            const cy = start.y + dy * opening.dist;
+
+            return (
+              <g key={opening.id} transform={`translate(${cx}, ${cy}) rotate(${angleDeg})`}>
+                {/* Hole background (clears the wall line) */}
+                <rect 
+                  x={-opening.width / 2} 
+                  y={-wall.thickness / 2 - 0.02} 
+                  width={opening.width} 
+                  height={wall.thickness + 0.04} 
+                  fill="#f9fafb" 
+                  className="dark:fill-[#111827]"
+                />
+                
+                {/* Frame (Thinner than wall) */}
+                <rect 
+                  x={-opening.width / 2} 
+                  y={-(wall.thickness * 0.7) / 2} 
+                  width={opening.width} 
+                  height={wall.thickness * 0.7} 
+                  fill="white"
+                  stroke={opening.type === 'window' ? '#3b82f6' : '#854d0e'} 
+                  strokeWidth={0.03}
+                  className={opening.type === 'window' ? 'dark:fill-gray-700' : 'dark:fill-orange-900'}
+                />
+                
+                {/* Window Glass Line or Door Swing indicator could go here */}
+                {opening.type === 'window' && (
+                  <line x1={-opening.width/2} y1={0} x2={opening.width/2} y2={0} stroke="#3b82f6" strokeWidth={0.02} />
+                )}
+              </g>
+            );
+          })}
+          
+          {/* Nodes */}
+          {nodes.map(node => {
+             const isSelected = selectedNodeIds.includes(node.id);
+             const isHovered = hoveredNodeId === node.id;
+             const isStart = drawingStartNode === node.id;
+             
+             return (
+               <circle 
+                 key={node.id}
+                 cx={node.x} cy={node.y}
+                 r={isSelected ? 0.2 : 0.15}
+                 fill={isSelected || isStart ? "#3b82f6" : (isHovered ? "#ef4444" : "white")}
+                 stroke="black"
+                 strokeWidth={0.05}
+                 className="transition-colors"
+               />
+             );
+          })}
+          
+          {/* Drawing Preview */}
+          {mode === 'DRAWING' && drawingStartNode && (
+             <line 
+               x1={nodes.find(n => n.id === drawingStartNode)?.x} 
+               y1={nodes.find(n => n.id === drawingStartNode)?.y} 
+               x2={mousePos.x} 
+               y2={mousePos.y}
+               stroke="#3b82f6"
+               strokeWidth={0.1}
+               strokeDasharray="0.2"
+               opacity={0.6}
+             />
+          )}
+        </g>
       </svg>
     </div>
   );

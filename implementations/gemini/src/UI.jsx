@@ -3,10 +3,149 @@ import { useStore } from './store';
 import { 
   PenTool, MousePointer2, Trash2, AppWindow, DoorOpen, Download, Upload, Share2, 
   Sun, Moon, Lock, LockOpen, Repeat, Layers, Plus, Eye, EyeOff, ChevronUp, ChevronDown, Copy,
-  GripVertical, Fence
+  GripVertical, Fence, Settings, History, Save, Minus, RotateCcw
 } from 'lucide-react';
 import { exportToJSON, importFromJSON, generateShareURL } from './persistence';
 import clsx from 'clsx';
+
+function MetadataModal({ onClose }) {
+  const { projectMeta, setProjectMeta } = useStore();
+  const [data, setData] = useState(projectMeta);
+
+  const handleSave = () => {
+    setProjectMeta(data);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-md border border-gray-200 dark:border-gray-700 animate-in zoom-in-95">
+        <h2 className="text-xl font-bold mb-4 dark:text-white">Project Settings</h2>
+        
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Project Title</label>
+            <input 
+              className="w-full px-3 py-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              value={data.title}
+              onChange={e => setData({ ...data, title: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Author</label>
+            <input 
+              className="w-full px-3 py-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              value={data.author}
+              onChange={e => setData({ ...data, author: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+            <textarea 
+              className="w-full px-3 py-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none h-24 resize-none"
+              value={data.description}
+              onChange={e => setData({ ...data, description: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 mt-6">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={handleSave}
+            className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 shadow-lg shadow-blue-500/30 transition-all"
+          >
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistoryModal({ onClose }) {
+  const { history, restoreSnapshot, deleteSnapshot, createSnapshot } = useStore();
+  const [newLabel, setNewLabel] = useState("");
+
+  const handleCreate = () => {
+    if (newLabel.trim()) {
+      createSnapshot(newLabel);
+      setNewLabel("");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-lg border border-gray-200 dark:border-gray-700 animate-in zoom-in-95 flex flex-col max-h-[80vh]">
+        <div className="flex justify-between items-center mb-4">
+           <h2 className="text-xl font-bold dark:text-white">Version History</h2>
+           <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+             <ChevronDown className="rotate-180" size={24} />
+           </button>
+        </div>
+        
+        <div className="flex gap-2 mb-4">
+          <input 
+            className="flex-1 px-3 py-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+            placeholder="New Version Name..."
+            value={newLabel}
+            onChange={e => setNewLabel(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleCreate()}
+          />
+          <button 
+            onClick={handleCreate}
+            disabled={!newLabel.trim()}
+            className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/30"
+          >
+            <Plus size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-2 pr-1">
+           {history.length === 0 && (
+             <div className="text-center text-gray-400 py-8">No snapshots saved yet.</div>
+           )}
+           {history.map((snap) => (
+             <div key={snap.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-700 group">
+                <div className="flex flex-col">
+                  <span className="font-medium dark:text-gray-200">{snap.label}</span>
+                  <span className="text-xs text-gray-400">
+                    {new Date(snap.timestamp).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                   <button 
+                     onClick={() => {
+                        if (confirm(`Restore "${snap.label}"? Unsaved changes will be lost.`)) {
+                           restoreSnapshot(snap.id);
+                           onClose();
+                        }
+                     }}
+                     className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded"
+                     title="Restore this version"
+                   >
+                     <Repeat size={16} />
+                   </button>
+                   <button 
+                     onClick={() => deleteSnapshot(snap.id)}
+                     className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 rounded"
+                     title="Delete"
+                   >
+                     <Trash2 size={16} />
+                   </button>
+                </div>
+             </div>
+           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function UI() {
   const { 
@@ -15,13 +154,16 @@ export default function UI() {
     setWallRailing, setRailingGate, toggleRailingGate,
     layers, activeLayerId, setAll,
     contextMenuData, theme, toggleTheme,
-    setSelection, setContextMenuData
+    setSelection, setContextMenuData,
+    projectMeta, viewState, setViewState
   } = useStore();
   
   // const { openings } = activeLayer; // Replaced by context logic below
 
   const [shareUrl, setShareUrl] = useState(null);
   const [shareError, setShareError] = useState(false);
+  const [showMeta, setShowMeta] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -212,7 +354,46 @@ export default function UI() {
 
       {/* Top Right Bar: System Actions */}
       <div className="absolute top-4 right-4 z-50 flex flex-row gap-2">
-        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-white/20 dark:border-white/10 flex flex-row gap-2 transition-colors">
+        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-white/20 dark:border-white/10 flex flex-row gap-2 transition-colors items-center">
+          
+          {/* Project Title */}
+          <button 
+            onClick={() => setShowMeta(true)}
+            className="px-3 py-2 mr-2 text-sm font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors truncate max-w-[150px]"
+            title="Edit Project Settings"
+          >
+            {projectMeta?.title || "Untitled"}
+          </button>
+
+          <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+
+          {/* Zoom Controls */}
+          <ToolButton 
+             onClick={() => setViewState({ zoom: viewState.zoom / 1.2 })}
+             icon={<Minus size={20} />}
+             label="Zoom Out"
+          />
+          <ToolButton 
+             onClick={() => setViewState({ x: 0, y: 0, zoom: 1 })}
+             icon={<RotateCcw size={20} />}
+             label="Reset View"
+          />
+          <ToolButton 
+             onClick={() => setViewState({ zoom: viewState.zoom * 1.2 })}
+             icon={<Plus size={20} />}
+             label="Zoom In"
+          />
+
+          <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+
+          <ToolButton 
+            onClick={toggleTheme}
+            icon={theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            label={theme === 'dark' ? "Light Mode" : "Dark Mode"}
+          />
+          
+          <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+
           <label className="cursor-pointer">
              <input type="file" accept=".json" onChange={handleImport} className="hidden" />
              <ToolButton 
@@ -223,7 +404,12 @@ export default function UI() {
              />
           </label>
           <ToolButton 
-            onClick={() => exportToJSON({ layers, activeLayerId })}
+            onClick={() => setShowHistory(true)}
+            icon={<History size={20} />}
+            label="Versions"
+          />
+          <ToolButton 
+            onClick={() => exportToJSON({ layers, activeLayerId, theme, viewState: useStore.getState().viewState, projectMeta, history: useStore.getState().history })}
             icon={<Download size={20} />}
             label="Export JSON"
           />
@@ -246,14 +432,6 @@ export default function UI() {
               </div>
             )}
           </div>
-          
-          <div className="w-px bg-gray-200 dark:bg-gray-700 mx-1" />
-          
-          <ToolButton 
-            onClick={toggleTheme}
-            icon={theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-            label={theme === 'dark' ? "Light Mode" : "Dark Mode"}
-          />
         </div>
       </div>
 
@@ -339,6 +517,9 @@ export default function UI() {
           )}
         </div>
       )}
+
+      {showMeta && <MetadataModal onClose={() => setShowMeta(false)} />}
+      {showHistory && <HistoryModal onClose={() => setShowHistory(false)} />}
     </>
   );
 }
@@ -435,36 +616,38 @@ function LayerManager() {
           >
             <Layers size={20} className="text-blue-500" />
             {expanded && <span className="text-sm font-semibold">Layers</span>}
-            {expanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+            {expanded && <ChevronDown size={16} className="text-gray-400" />}
           </button>
 
           {expanded && (
-            <div className="relative" ref={addMenuRef}>
-               <button 
-                 onClick={(e) => { e.stopPropagation(); setShowAddMenu(!showAddMenu); }}
-                 className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-300"
-                 title="Add New Layer"
-               >
-                 <Plus size={16} />
-               </button>
-               
-               {/* Add Menu Dropdown */}
-               {showAddMenu && (
-                 <div className="absolute top-full right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1 z-50 w-24 flex flex-col">
-                    <button 
-                      className="text-left px-3 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                      onClick={() => { addLayer('wall'); setShowAddMenu(false); }}
-                    >
-                      <span>🧱</span> Wall
-                    </button>
-                    <button 
-                      className="text-left px-3 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                      onClick={() => { addLayer('floor'); setShowAddMenu(false); }}
-                    >
-                      <span>⬜</span> Floor
-                    </button>
-                 </div>
-               )}
+            <div className="flex items-center gap-1">
+              <div className="relative" ref={addMenuRef}>
+                 <button 
+                   onClick={(e) => { e.stopPropagation(); setShowAddMenu(!showAddMenu); }}
+                   className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-300"
+                   title="Add New Layer"
+                 >
+                   <Plus size={16} />
+                 </button>
+                 
+                 {/* Add Menu Dropdown */}
+                 {showAddMenu && (
+                   <div className="absolute top-full right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1 z-50 w-24 flex flex-col">
+                      <button 
+                        className="text-left px-3 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                        onClick={() => { addLayer('wall'); setShowAddMenu(false); }}
+                      >
+                        <span>🧱</span> Wall
+                      </button>
+                      <button 
+                        className="text-left px-3 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                        onClick={() => { addLayer('floor'); setShowAddMenu(false); }}
+                      >
+                        <span>⬜</span> Floor
+                      </button>
+                   </div>
+                 )}
+              </div>
             </div>
           )}
         </div>

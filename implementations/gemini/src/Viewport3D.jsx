@@ -40,29 +40,23 @@ const Sash = ({ width, sashH, glassThick, frameDepth, glassColor, frameColor }) 
   </group>
 );
 
-function Opening({ data, isDark }) {
-  const { type, size, isOpen, isFlipped } = data;
-  const [w, h, d] = size;
-  const frameThick = 0.05;
-  const frameDepth = d + 0.02;
-  const glassThick = 0.02;
+// --- Asset Registry ---
+const WINDOW_ASSETS = {
+  'standard': (props) => <StandardWindow {...props} />,
+  // 'victorian': (props) => <VictorianWindow {...props} />, // Future
+};
 
-  const frameColor = isDark ? "#4b5563" : "#374151";
-  const glassColor = "#bae6fd";
-  const doorColor = "#92400e"; // Wood
+const DOOR_ASSETS = {
+  'standard': (props) => <StandardDoor {...props} />,
+};
 
-  if (type === 'window') {
-    const innerW = w - 2 * frameThick;
-    const innerH = h - 2 * frameThick;
-    const sashW = innerW / 2;
-    const sashH = innerH;
-
+function StandardWindow({ w, h, frameDepth, frameThick, glassThick, glassColor, frameColor, isFlipped, isOpen, sashW, sashH }) {
     const angle = Math.PI / 3;
     const leftAngle = isFlipped ? -angle : angle;
     const rightAngle = isFlipped ? angle : -angle;
 
     return (
-      <group position={data.pos} rotation={data.rot}>
+      <>
         {/* Frame Top/Bottom */}
         <mesh position={[0, h/2 - frameThick/2, 0]} castShadow receiveShadow>
            <boxGeometry args={[w, frameThick, frameDepth]} />
@@ -109,13 +103,14 @@ function Opening({ data, isDark }) {
              />
           </group>
         </group>
-      </group>
+      </>
     );
-  } else {
-    // Door
+}
+
+function StandardDoor({ w, h, frameDepth, frameThick, frameColor, doorColor, isFlipped, isOpen }) {
     const angle = isFlipped ? -Math.PI / 2 : Math.PI / 2;
     return (
-      <group position={data.pos} rotation={data.rot}>
+      <>
          {/* Frame Top */}
         <mesh position={[0, h/2 - frameThick/2, 0]} castShadow receiveShadow>
            <boxGeometry args={[w, frameThick, frameDepth]} />
@@ -144,6 +139,60 @@ function Opening({ data, isDark }) {
              <meshStandardMaterial color="gold" metalness={0.8} roughness={0.2} />
            </mesh>
         </group>
+      </>
+    );
+}
+
+function Opening({ data, isDark }) {
+  const { type, size, isOpen, isFlipped, assetId = 'standard' } = data;
+  const [w, h, d] = size;
+  const frameThick = 0.05;
+  const frameDepth = d + 0.02;
+  const glassThick = 0.02;
+
+  const frameColor = isDark ? "#4b5563" : "#374151";
+  const glassColor = "#bae6fd";
+  const doorColor = "#92400e"; // Wood
+
+  if (type === 'window') {
+    const innerW = w - 2 * frameThick;
+    const innerH = h - 2 * frameThick;
+    const sashW = innerW / 2;
+    const sashH = innerH;
+
+    const AssetComponent = WINDOW_ASSETS[assetId] || WINDOW_ASSETS['standard'];
+
+    return (
+      <group position={data.pos} rotation={data.rot}>
+         <AssetComponent 
+            w={w} h={h} 
+            frameDepth={frameDepth} 
+            frameThick={frameThick} 
+            glassThick={glassThick}
+            glassColor={glassColor}
+            frameColor={frameColor}
+            isFlipped={isFlipped}
+            isOpen={isOpen}
+            sashW={sashW}
+            sashH={sashH}
+         />
+      </group>
+    );
+  } else {
+    // Door
+    const AssetComponent = DOOR_ASSETS[assetId] || DOOR_ASSETS['standard'];
+
+    return (
+      <group position={data.pos} rotation={data.rot}>
+         <AssetComponent 
+            w={w} h={h} 
+            frameDepth={frameDepth}
+            frameThick={frameThick}
+            frameColor={frameColor}
+            doorColor={doorColor}
+            isFlipped={isFlipped}
+            isOpen={isOpen}
+         />
       </group>
     );
   }

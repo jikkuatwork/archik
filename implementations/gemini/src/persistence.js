@@ -79,7 +79,10 @@ export function generateShareURL(state) {
   const minifiedLayers = state.layers.map(minifyLayer);
   const minifiedState = {
      layers: minifiedLayers,
-     activeLayerId: state.activeLayerId
+     activeLayerId: state.activeLayerId,
+     theme: state.theme,
+     viewState: state.viewState,
+     projectMeta: state.projectMeta
   };
   
   const json = JSON.stringify(minifiedState);
@@ -89,7 +92,7 @@ export function generateShareURL(state) {
   url.hash = compressed;
   
   const fullUrl = url.toString();
-  if (fullUrl.length > 4000) return null; // Increased limit slightly, but still risky
+  if (fullUrl.length > 5000) return null; // Increased limit
   
   return fullUrl;
 }
@@ -123,7 +126,10 @@ export function loadFromURL() {
       const restoredLayers = parsed.layers.map(restoreLayer);
       return {
          layers: restoredLayers,
-         activeLayerId: parsed.activeLayerId || restoredLayers[0].id
+         activeLayerId: parsed.activeLayerId || restoredLayers[0].id,
+         theme: parsed.theme,
+         viewState: parsed.viewState,
+         projectMeta: parsed.projectMeta
       };
     }
     
@@ -138,14 +144,22 @@ export function exportToJSON(state) {
   const data = JSON.stringify({
     layers: state.layers,
     activeLayerId: state.activeLayerId,
-    version: 2
+    theme: state.theme,
+    viewState: state.viewState,
+    projectMeta: state.projectMeta,
+    history: state.history,
+    version: 3
   }, null, 2);
   
   const blob = new Blob([data], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'archik-plan-v2.json';
+  
+  const title = state.projectMeta?.title || 'archik-plan';
+  const safeTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  
+  a.download = `${safeTitle}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -157,11 +171,15 @@ export function importFromJSON(file) {
       try {
         const json = JSON.parse(e.target.result);
         
-        // v2
+        // v3/v2
         if (json.layers && Array.isArray(json.layers)) {
            resolve({
               layers: json.layers,
-              activeLayerId: json.activeLayerId || json.layers[0]?.id
+              activeLayerId: json.activeLayerId || json.layers[0]?.id,
+              theme: json.theme,
+              viewState: json.viewState,
+              projectMeta: json.projectMeta,
+              history: json.history || []
            });
            return;
         }
