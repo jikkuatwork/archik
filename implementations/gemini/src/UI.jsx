@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from './store';
 import { 
   PenTool, MousePointer2, Trash2, AppWindow, DoorOpen, Download, Upload, Share2, 
@@ -263,9 +263,24 @@ function LayerManager() {
   const [draggedId, setDraggedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const addMenuRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (addMenuRef.current && !addMenuRef.current.contains(event.target)) {
+        setShowAddMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [addMenuRef]);
 
   const displayLayers = [...layers].reverse();
 
+  // ... (Drag handlers same) ...
   const handleDragStart = (e, id) => {
     setDraggedId(id);
     e.dataTransfer.effectAllowed = 'move';
@@ -321,17 +336,49 @@ function LayerManager() {
   return (
     <div className="flex flex-col items-start gap-2">
       <div 
-        className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-white/20 dark:border-white/10 transition-all duration-300 overflow-hidden"
+        className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border border-white/20 dark:border-white/10 transition-all duration-300 overflow-visible relative"
         style={{ width: expanded ? '240px' : 'auto' }}
       >
-        <button 
-          onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-2 w-full text-left p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-        >
-          <Layers size={20} className="text-blue-500" />
-          {expanded && <span className="text-sm font-semibold flex-1">Layers</span>}
-          {expanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-        </button>
+        <div className="flex items-center justify-between w-full gap-2">
+          <button 
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-2 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-left"
+          >
+            <Layers size={20} className="text-blue-500" />
+            {expanded && <span className="text-sm font-semibold">Layers</span>}
+            {expanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+          </button>
+
+          {expanded && (
+            <div className="relative" ref={addMenuRef}>
+               <button 
+                 onClick={(e) => { e.stopPropagation(); setShowAddMenu(!showAddMenu); }}
+                 className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-300"
+                 title="Add New Layer"
+               >
+                 <Plus size={16} />
+               </button>
+               
+               {/* Add Menu Dropdown */}
+               {showAddMenu && (
+                 <div className="absolute top-full right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1 z-50 w-24 flex flex-col">
+                    <button 
+                      className="text-left px-3 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                      onClick={() => { addLayer('wall'); setShowAddMenu(false); }}
+                    >
+                      <span>🧱</span> Wall
+                    </button>
+                    <button 
+                      className="text-left px-3 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                      onClick={() => { addLayer('floor'); setShowAddMenu(false); }}
+                    >
+                      <span>⬜</span> Floor
+                    </button>
+                 </div>
+               )}
+            </div>
+          )}
+        </div>
 
         {expanded && (
           <div className="mt-2 flex flex-col gap-1 max-h-60 overflow-y-auto">
@@ -427,23 +474,6 @@ function LayerManager() {
                 </div>
               );
             })}
-            
-            <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
-            
-            <div className="flex gap-1">
-               <button 
-                 onClick={() => addLayer('wall')}
-                 className="flex-1 flex items-center justify-center gap-1 p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-xs"
-               >
-                 <Plus size={14} /> Wall
-               </button>
-               <button 
-                 onClick={() => addLayer('floor')}
-                 className="flex-1 flex items-center justify-center gap-1 p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-xs"
-               >
-                 <Plus size={14} /> Floor
-               </button>
-            </div>
           </div>
         )}
       </div>
