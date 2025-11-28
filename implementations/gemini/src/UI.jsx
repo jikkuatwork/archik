@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from './store';
 import { 
   PenTool, MousePointer2, Trash2, AppWindow, DoorOpen, Download, Upload, Share2, 
-  Sun, Moon, Lock, LockOpen, Repeat, Layers, Plus, Eye, EyeOff, ChevronUp, ChevronDown, Copy 
+  Sun, Moon, Lock, LockOpen, Repeat, Layers, Plus, Eye, EyeOff, ChevronUp, ChevronDown, Copy,
+  GripVertical
 } from 'lucide-react';
 import { exportToJSON, importFromJSON, generateShareURL } from './persistence';
 import clsx from 'clsx';
@@ -252,15 +253,46 @@ export default function UI() {
 function LayerManager() {
   const { 
     layers, activeLayerId, setActiveLayer, 
-    addLayer, removeLayer, toggleLayerVisibility, duplicateLayer 
+    addLayer, removeLayer, toggleLayerVisibility, duplicateLayer, reorderLayers, updateLayer
   } = useStore();
   const [expanded, setExpanded] = useState(false);
+  const [draggedId, setDraggedId] = useState(null);
 
-  // Invert layers for display so stack order is bottom-up visually (like standard CAD/Photo)
-  // Store: Index 0 is bottom. Display: Index 0 at bottom.
-  // Actually, standard list is Top = Top Layer.
-  // So we should reverse the array for rendering if we want "Top" at the top of the UI list.
   const displayLayers = [...layers].reverse();
+
+  const handleDragStart = (e, id) => {
+    setDraggedId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, targetId) => {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId) {
+      setDraggedId(null);
+      return;
+    }
+
+    const fromIndexUI = displayLayers.findIndex(l => l.id === draggedId);
+    const toIndexUI = displayLayers.findIndex(l => l.id === targetId);
+
+    if (fromIndexUI === -1 || toIndexUI === -1) {
+      setDraggedId(null);
+      return;
+    }
+
+    const len = layers.length;
+    const fromIndexStore = len - 1 - fromIndexUI;
+    const toIndexStore = len - 1 - toIndexUI;
+
+    reorderLayers(fromIndexStore, toIndexStore);
+    setDraggedId(null);
+  };
 
   return (
     <div className="flex flex-col items-start gap-2">
@@ -282,6 +314,7 @@ function LayerManager() {
             {displayLayers.map((layer) => {
               const isActive = layer.id === activeLayerId;
               const isWall = layer.type === 'wall';
+              const isDragged = draggedId === layer.id;
               
               const activeClass = isWall 
                 ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
@@ -290,12 +323,26 @@ function LayerManager() {
               return (
                 <div 
                   key={layer.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, layer.id)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, layer.id)}
                   className={clsx(
-                    "flex items-center gap-2 p-2 rounded-lg text-sm group transition-colors cursor-pointer border",
-                    isActive ? activeClass : "border-transparent hover:bg-gray-100 dark:hover:bg-gray-700"
+                    "flex items-center gap-2 p-2 rounded-lg text-sm group transition-all cursor-pointer border",
+                    isActive ? activeClass : "border-transparent hover:bg-gray-100 dark:hover:bg-gray-700",
+                    isDragged && "opacity-50 border-dashed border-gray-400"
                   )}
                   onClick={() => setActiveLayer(layer.id)}
+                  onDoubleClick={() => {
+                     const newName = prompt("Rename Layer", layer.name);
+                     if (newName) updateLayer(layer.id, { name: newName });
+                  }}
                 >
+                   {/* Drag Handle */}
+                   <span className="cursor-grab text-gray-300 dark:text-gray-600 hover:text-gray-500">
+                     <GripVertical size={14} />
+                   </span>
+
                    {/* Visibility */}
                    <button 
                      onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }}
@@ -310,7 +357,7 @@ function LayerManager() {
                    </span>
                    
                    {/* Name */}
-                   <span className="flex-1 truncate">{layer.name}</span>
+                   <span className="flex-1 truncate select-none" title="Double click to rename">{layer.name}</span>
 
                    {/* Actions (visible on hover) */}
                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
