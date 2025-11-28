@@ -48,6 +48,9 @@ export default function Editor2D() {
     };
   }, [viewState]);
 
+  // Helper for scale-invariant rendering (pixels -> world units)
+  const toWorldScale = (pixels) => pixels / (50 * viewState.zoom);
+
     // --- Navigation Handlers ---
     const handleWheel = useCallback((e) => {
       e.preventDefault();
@@ -85,7 +88,7 @@ export default function Editor2D() {
     // ... (rest of tool logic)
     
     // Check Node Hit
-    const hitNode = nodes.find(n => Math.hypot(n.x - worldPos.x, n.y - worldPos.y) < 0.2 / viewState.zoom); // Dynamic hit radius
+    const hitNode = nodes.find(n => Math.hypot(n.x - worldPos.x, n.y - worldPos.y) < toWorldScale(10)); // 10px hit radius
     
     if (mode === 'IDLE') {
        if (hitNode) {
@@ -176,7 +179,7 @@ export default function Editor2D() {
     }
     
     // Hover logic
-    const hitNode = nodes.find(n => Math.hypot(n.x - worldPos.x, n.y - worldPos.y) < 0.2 / viewState.zoom);
+    const hitNode = nodes.find(n => Math.hypot(n.x - worldPos.x, n.y - worldPos.y) < toWorldScale(10));
     setHoveredNodeId(hitNode ? hitNode.id : null);
   };
 
@@ -244,10 +247,10 @@ export default function Editor2D() {
                  <circle 
                    key={node.id}
                    cx={node.x} cy={node.y}
-                   r={0.15}
+                   r={toWorldScale(6)}
                    fill="white"
                    stroke="gray"
-                   strokeWidth={0.05}
+                   strokeWidth={toWorldScale(2)}
                  />
               ))}
             </g>
@@ -336,10 +339,10 @@ export default function Editor2D() {
                <circle 
                  key={node.id}
                  cx={node.x} cy={node.y}
-                 r={isSelected ? 0.2 : 0.15}
+                 r={isSelected ? toWorldScale(10) : toWorldScale(8)}
                  fill={isSelected || isStart ? "#3b82f6" : (isHovered ? "#ef4444" : "white")}
                  stroke="black"
-                 strokeWidth={0.05}
+                 strokeWidth={toWorldScale(2.5)}
                  className="transition-colors"
                />
              );
