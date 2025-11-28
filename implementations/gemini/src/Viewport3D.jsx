@@ -189,7 +189,7 @@ function ProceduralWall({ wall, isDark }) {
     
     // Sort Openings
     const myOpenings = openings
-      .filter(o => o.wallId === wall.id)
+      .filter(o => o.wallId === wall.id && wallLen >= o.width + 0.2)
       .sort((a, b) => a.dist - b.dist);
       
     // Define Segments (t ranges)
@@ -320,12 +320,15 @@ function ProceduralWall({ wall, isDark }) {
   }, [wall, nodes, walls, openings]);
 
   const wallOpenings = useMemo(() => {
-     // ... same as before
-     return openings.filter(o => o.wallId === wall.id).map(op => {
-        const start = nodes.find(n => n.id === wall.startNodeId);
-        const end = nodes.find(n => n.id === wall.endNodeId);
-        if (!start || !end) return null;
-        
+     const start = nodes.find(n => n.id === wall.startNodeId);
+     const end = nodes.find(n => n.id === wall.endNodeId);
+     if (!start || !end) return [];
+     
+     const wallLen = Math.hypot(end.x - start.x, end.y - start.y);
+
+     return openings
+       .filter(o => o.wallId === wall.id && wallLen >= o.width + 0.2)
+       .map(op => {
         const dx = end.x - start.x;
         const dy = -(end.y - start.y); 
         const angle = Math.atan2(dx, dy); 

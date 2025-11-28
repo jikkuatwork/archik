@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from './store';
 import { PenTool, MousePointer2, Trash2, AppWindow, DoorOpen, Download, Upload, Share2, Sun, Moon, Lock, LockOpen, Repeat } from 'lucide-react';
 import { exportToJSON, importFromJSON, generateShareURL } from './persistence';
@@ -9,10 +9,30 @@ export default function UI() {
     mode, setMode, reset, 
     selectedWallIds, selectedNodeIds, deleteSelection, addOpening, setWallOpening, toggleOpeningStatus, flipOpening,
     nodes, walls, openings, setAll,
-    contextMenuData, theme, toggleTheme
+    contextMenuData, theme, toggleTheme,
+    setSelection, setContextMenuData
   } = useStore();
   const [shareUrl, setShareUrl] = useState(null);
   const [shareError, setShareError] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (mode !== 'IDLE') {
+           setMode('IDLE');
+        }
+        // Also clear selection on Escape for better UX? 
+        // Or only if mode was already IDLE?
+        // Let's do: If drawing/dragging -> go IDLE. If IDLE -> Clear Selection.
+        if (mode === 'IDLE') {
+           setSelection({ nodes: [], walls: [] });
+           setContextMenuData(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mode, setMode, setSelection, setContextMenuData]);
 
   const handleImport = (e) => {
     const file = e.target.files[0];

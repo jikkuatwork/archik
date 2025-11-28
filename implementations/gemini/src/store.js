@@ -23,7 +23,10 @@ export const useStore = create((set) => ({
   contextMenuData: null, // { x, y, worldX, worldY }
   theme: typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
 
-  setMode: (mode) => set({ mode }),
+  setMode: (mode) => set((state) => ({ 
+    mode,
+    drawingStartNode: mode === 'DRAWING' ? null : state.drawingStartNode 
+  })),
   setHoveredNodeId: (id) => set({ hoveredNodeId: id }),
   setHoveredWallId: (id) => set({ hoveredWallId: id }),
   setSelection: ({ nodes, walls }) => set({ selectedNodeIds: nodes, selectedWallIds: walls }),

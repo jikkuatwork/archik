@@ -293,6 +293,10 @@ export default function Editor2D() {
           const startNode = nodes.find(n => n.id === wall.startNodeId);
           const endNode = nodes.find(n => n.id === wall.endNodeId);
           if (!startNode || !endNode) return null;
+          
+          const dx = endNode.x - startNode.x;
+          const dy = endNode.y - startNode.y;
+          const wallLen = Math.hypot(dx, dy);
 
           const s = toScreen(startNode.x, startNode.y);
           const e = toScreen(endNode.x, endNode.y);
@@ -304,17 +308,17 @@ export default function Editor2D() {
           const opacity = isSelected || isHovered ? 1.0 : 0.5;
 
           // Openings
-          const wallOpenings = openings.filter(o => o.wallId === wall.id).map(op => {
-             const dx = endNode.x - startNode.x;
-             const dy = endNode.y - startNode.y;
-             const len = Math.hypot(dx, dy);
+          const wallOpenings = openings
+            .filter(o => o.wallId === wall.id && wallLen >= o.width + 0.2)
+            .map(op => {
              const cx = startNode.x + dx * op.dist;
              const cy = startNode.y + dy * op.dist;
              
-             const ux = dx / len;
-             const uy = dy / len;
+             const ux = dx / wallLen;
+             const uy = dy / wallLen;
              
              const w2 = op.width / 2;
+             // Coordinates of the opening cut on the wall line
              const x1 = cx - ux * w2;
              const y1 = cy - uy * w2;
              const x2 = cx + ux * w2;
@@ -322,16 +326,54 @@ export default function Editor2D() {
              
              const p1 = toScreen(x1, y1);
              const p2 = toScreen(x2, y2);
-             
-             return (
+
+             // Base cut (erases the wall)
+             const cutLine = (
                <line 
-                 key={op.id}
                  x1={p1.x} y1={p1.y}
                  x2={p2.x} y2={p2.y}
                  stroke={isDark ? "#0f172a" : "white"}
                  strokeWidth={(wall.thickness * SCALE) - 2}
                  strokeLinecap="butt"
                />
+             );
+
+             if (op.type === 'window') {
+                return (
+                   <g key={op.id}>
+                      {cutLine}
+                      {/* Window: Subtle Blue Tint */}
+                      <line 
+                        x1={p1.x} y1={p1.y}
+                        x2={p2.x} y2={p2.y}
+                        stroke="#60a5fa" 
+                        strokeWidth={(wall.thickness * SCALE) - 2}
+                        strokeOpacity="0.3"
+                        strokeLinecap="butt"
+                      />
+                   </g>
+                );
+             } else if (op.type === 'door') {
+                return (
+                   <g key={op.id}>
+                      {cutLine}
+                      {/* Door: Subtle Warm Tint */}
+                      <line 
+                        x1={p1.x} y1={p1.y}
+                        x2={p2.x} y2={p2.y}
+                        stroke="#fb923c" 
+                        strokeWidth={(wall.thickness * SCALE) - 2}
+                        strokeOpacity="0.3"
+                        strokeLinecap="butt"
+                      />
+                   </g>
+                );
+             }
+
+             return (
+               <g key={op.id}>
+                 {cutLine}
+               </g>
              );
           });
 
