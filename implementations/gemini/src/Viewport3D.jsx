@@ -232,14 +232,18 @@ function ProceduralWall({ wall, isDark }) {
       const tr1 = to3D(r1, yTop);
       
       // Faces
-      // Top
-      pushQuad(tl0, tl1, tr1, tr0);
-      // Bottom
-      pushQuad(br0, br1, bl1, bl0); // winding? CW to point down?
+      // Top (Face Up: Outward)
+      // LeftStart -> RightStart -> RightEnd -> LeftEnd
+      pushQuad(tl0, tr0, tr1, tl1);
+      
+      // Bottom (Face Down: Outward)
+      // RightStart -> LeftStart -> LeftEnd -> RightEnd
+      pushQuad(br0, bl0, bl1, br1);
+      
       // Right Side (r0 -> r1)
       pushQuad(br0, br1, tr1, tr0);
       // Left Side (l1 -> l0) -- Note direction for CCW normal
-      pushQuad(bl1, bl0, tl0, tl1); // Wait, bl1->bl0 is right to left.
+      pushQuad(bl1, bl0, tl0, tl1); 
       
       // Start Cap (at t0) - Normal pointing back?
       // Render only if strictly internal (hole) OR if it's a loose end (no neighbors)
@@ -250,8 +254,8 @@ function ProceduralWall({ wall, isDark }) {
       
       // End Cap (at t1) - Normal pointing forward?
       if (t1 < 0.999 || !skipEndCap) {
-         // r1 -> l1
-         pushQuad(br1, bl1, tl1, tr1);
+         // l1 -> r1 (LeftEnd -> RightEnd)
+         pushQuad(bl1, br1, tr1, tl1);
       }
     };
     
