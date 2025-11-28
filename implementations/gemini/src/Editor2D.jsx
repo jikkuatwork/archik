@@ -6,15 +6,25 @@ const SCALE = 50;
 
 export default function Editor2D() {
   const { 
-    nodes, walls, openings, mode, 
+    layers, activeLayerId, mode, 
     addNode, addWall, updateNode, 
     hoveredNodeId, setHoveredNodeId, 
     hoveredWallId, setHoveredWallId,
     selectedNodeIds, selectedWallIds, setSelection,
     setMode, drawingStartNode, setDrawingStartNode,
-    setContextMenuData, theme
+    setContextMenuData, theme, setActiveLayer
   } = useStore();
   
+  // Auto-fix activeLayerId if invalid
+  useEffect(() => {
+    if (layers.length > 0 && !layers.find(l => l.id === activeLayerId)) {
+      setActiveLayer(layers[0].id);
+    }
+  }, [layers, activeLayerId, setActiveLayer]);
+
+  const activeLayer = layers.find(l => l.id === activeLayerId) || { nodes: [], walls: [], openings: [] };
+  const { nodes, walls } = activeLayer; // For interaction logic only
+
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ w: 0, h: 0 });
   const [dragId, setDragId] = useState(null);
@@ -25,7 +35,7 @@ export default function Editor2D() {
   // Theme Colors
   const isDark = theme === 'dark';
   const gridColor = isDark ? "#334155" : "#e5e5e5"; // Slate-700 vs Gray-200
-  const wallColorDefault = isDark ? "#94a3b8" : "#94a3b8"; // Keep same?
+  const wallColorDefault = isDark ? "#94a3b8" : "#94a3b8"; 
   const wallColorHover = isDark ? "#cbd5e1" : "#64748b";
   const nodeColorDefault = isDark ? "#e2e8f0" : "#1e293b";
   const nodeStroke = isDark ? "#0f172a" : "white";
@@ -288,132 +298,135 @@ export default function Editor2D() {
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" />
 
-        {/* Walls */}
-        {walls.map(wall => {
-          const startNode = nodes.find(n => n.id === wall.startNodeId);
-          const endNode = nodes.find(n => n.id === wall.endNodeId);
-          if (!startNode || !endNode) return null;
-          
-          const dx = endNode.x - startNode.x;
-          const dy = endNode.y - startNode.y;
-          const wallLen = Math.hypot(dx, dy);
-
-          const s = toScreen(startNode.x, startNode.y);
-          const e = toScreen(endNode.x, endNode.y);
-
-          const isHovered = hoveredWallId === wall.id;
-          const isSelected = selectedWallIds.includes(wall.id);
-          
-          const strokeColor = isSelected ? "#3b82f6" : (isHovered ? wallColorHover : wallColorDefault);
-          const opacity = isSelected || isHovered ? 1.0 : 0.5;
-
-          // Openings
-          const wallOpenings = openings
-            .filter(o => o.wallId === wall.id && wallLen >= o.width + 0.2)
-            .map(op => {
-             const cx = startNode.x + dx * op.dist;
-             const cy = startNode.y + dy * op.dist;
-             
-             const ux = dx / wallLen;
-             const uy = dy / wallLen;
-             
-             const w2 = op.width / 2;
-             // Coordinates of the opening cut on the wall line
-             const x1 = cx - ux * w2;
-             const y1 = cy - uy * w2;
-             const x2 = cx + ux * w2;
-             const y2 = cy + uy * w2;
-             
-             const p1 = toScreen(x1, y1);
-             const p2 = toScreen(x2, y2);
-
-             // Base cut (erases the wall)
-             const cutLine = (
-               <line 
-                 x1={p1.x} y1={p1.y}
-                 x2={p2.x} y2={p2.y}
-                 stroke={isDark ? "#0f172a" : "white"}
-                 strokeWidth={(wall.thickness * SCALE) - 2}
-                 strokeLinecap="butt"
-               />
-             );
-
-             if (op.type === 'window') {
-                return (
-                   <g key={op.id}>
-                      {cutLine}
-                      {/* Window: Subtle Blue Tint */}
-                      <line 
-                        x1={p1.x} y1={p1.y}
-                        x2={p2.x} y2={p2.y}
-                        stroke="#60a5fa" 
-                        strokeWidth={(wall.thickness * SCALE) - 2}
-                        strokeOpacity="0.3"
-                        strokeLinecap="butt"
-                      />
-                   </g>
-                );
-             } else if (op.type === 'door') {
-                return (
-                   <g key={op.id}>
-                      {cutLine}
-                      {/* Door: Subtle Warm Tint */}
-                      <line 
-                        x1={p1.x} y1={p1.y}
-                        x2={p2.x} y2={p2.y}
-                        stroke="#fb923c" 
-                        strokeWidth={(wall.thickness * SCALE) - 2}
-                        strokeOpacity="0.3"
-                        strokeLinecap="butt"
-                      />
-                   </g>
-                );
-             }
-
-             return (
-               <g key={op.id}>
-                 {cutLine}
-               </g>
-             );
-          });
+        {/* Render Layers */}
+        {layers.map(layer => {
+          if (!layer.visible) return null;
+          const isActive = layer.id === activeLayerId;
+          const layerOpacity = isActive ? 1.0 : 0.2;
+          const isInteractable = isActive ? "auto" : "none";
 
           return (
-            <g key={wall.id}>
-              <line 
-                x1={s.x} y1={s.y} x2={e.x} y2={e.y}
-                stroke={strokeColor}
-                strokeWidth={wall.thickness * SCALE}
-                strokeLinecap="round"
-                className="transition-colors duration-150"
-                style={{ opacity }}
-              />
-              {wallOpenings}
+            <g key={layer.id} style={{ opacity: layerOpacity, pointerEvents: isInteractable }}>
+              {/* Walls */}
+              {layer.walls.map(wall => {
+                const startNode = layer.nodes.find(n => n.id === wall.startNodeId);
+                const endNode = layer.nodes.find(n => n.id === wall.endNodeId);
+                if (!startNode || !endNode) return null;
+                
+                const dx = endNode.x - startNode.x;
+                const dy = endNode.y - startNode.y;
+                const wallLen = Math.hypot(dx, dy);
+
+                const s = toScreen(startNode.x, startNode.y);
+                const e = toScreen(endNode.x, endNode.y);
+
+                const isHovered = isActive && hoveredWallId === wall.id;
+                const isSelected = isActive && selectedWallIds.includes(wall.id);
+                
+                const strokeColor = isSelected ? "#3b82f6" : (isHovered ? wallColorHover : wallColorDefault);
+                const opacity = isSelected || isHovered ? 1.0 : 0.5;
+
+                // Openings
+                const wallOpenings = layer.openings
+                  .filter(o => o.wallId === wall.id && wallLen >= o.width + 0.2)
+                  .map(op => {
+                   const cx = startNode.x + dx * op.dist;
+                   const cy = startNode.y + dy * op.dist;
+                   
+                   const ux = dx / wallLen;
+                   const uy = dy / wallLen;
+                   
+                   const w2 = op.width / 2;
+                   const x1 = cx - ux * w2;
+                   const y1 = cy - uy * w2;
+                   const x2 = cx + ux * w2;
+                   const y2 = cy + uy * w2;
+                   
+                   const p1 = toScreen(x1, y1);
+                   const p2 = toScreen(x2, y2);
+
+                   const cutLine = (
+                     <line 
+                       x1={p1.x} y1={p1.y}
+                       x2={p2.x} y2={p2.y}
+                       stroke={isDark ? "#0f172a" : "white"}
+                       strokeWidth={(wall.thickness * SCALE) - 2}
+                       strokeLinecap="butt"
+                     />
+                   );
+
+                   if (op.type === 'window') {
+                      return (
+                         <g key={op.id}>
+                            {cutLine}
+                            <line 
+                              x1={p1.x} y1={p1.y}
+                              x2={p2.x} y2={p2.y}
+                              stroke="#60a5fa" 
+                              strokeWidth={(wall.thickness * SCALE) - 2}
+                              strokeOpacity="0.3"
+                              strokeLinecap="butt"
+                            />
+                         </g>
+                      );
+                   } else if (op.type === 'door') {
+                      return (
+                         <g key={op.id}>
+                            {cutLine}
+                            <line 
+                              x1={p1.x} y1={p1.y}
+                              x2={p2.x} y2={p2.y}
+                              stroke="#fb923c" 
+                              strokeWidth={(wall.thickness * SCALE) - 2}
+                              strokeOpacity="0.3"
+                              strokeLinecap="butt"
+                            />
+                         </g>
+                      );
+                   }
+                   return <g key={op.id}>{cutLine}</g>;
+                });
+
+                return (
+                  <g key={wall.id}>
+                    <line 
+                      x1={s.x} y1={s.y} x2={e.x} y2={e.y}
+                      stroke={strokeColor}
+                      strokeWidth={wall.thickness * SCALE}
+                      strokeLinecap="round"
+                      className="transition-colors duration-150"
+                      style={{ opacity }}
+                    />
+                    {wallOpenings}
+                  </g>
+                );
+              })}
+
+              {/* Nodes */}
+              {layer.nodes.map(node => {
+                 const s = toScreen(node.x, node.y);
+                 const isStart = isActive && node.id === drawingStartNode;
+                 const isSelected = isActive && selectedNodeIds.includes(node.id);
+                 
+                 return (
+                   <circle 
+                     key={node.id} 
+                     cx={s.x} 
+                     cy={s.y} 
+                     r={isStart ? 8 : 6} 
+                     fill={(isActive && (hoveredNodeId === node.id || dragId === node.id || isStart || isSelected)) ? "#3b82f6" : nodeColorDefault}
+                     stroke={nodeStroke}
+                     strokeWidth="2"
+                     className="cursor-pointer transition-colors"
+                   />
+                 );
+              })}
             </g>
           );
         })}
         
         {previewLine}
         {selectionRect}
-
-        {/* Nodes */}
-        {nodes.map(node => {
-           const s = toScreen(node.x, node.y);
-           const isStart = node.id === drawingStartNode;
-           const isSelected = selectedNodeIds.includes(node.id);
-           
-           return (
-             <circle 
-               key={node.id} 
-               cx={s.x} 
-               cy={s.y} 
-               r={isStart ? 8 : 6} 
-               fill={hoveredNodeId === node.id || dragId === node.id || isStart || isSelected ? "#3b82f6" : nodeColorDefault}
-               stroke={nodeStroke}
-               strokeWidth="2"
-               className="cursor-pointer transition-colors"
-             />
-           );
-        })}
       </svg>
     </div>
   );

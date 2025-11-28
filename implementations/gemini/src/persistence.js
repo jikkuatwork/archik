@@ -1,18 +1,19 @@
 import LZString from 'lz-string';
 
-// Helper to minify IDs for URL sharing
-// Maps UUIDs to n1, n2, w1, w2...
-function minifyState(state) {
+const DEFAULT_LAYER_ID = 'layer-1';
+
+// Helper to minify IDs within a layer
+function minifyLayer(layer) {
   const nodeMap = new Map();
   const wallMap = new Map();
   
-  const minNodes = state.nodes.map((n, i) => {
+  const minNodes = layer.nodes.map((n, i) => {
     const id = `n${i}`;
     nodeMap.set(n.id, id);
     return { ...n, id };
   });
 
-  const minWalls = state.walls.map((w, i) => {
+  const minWalls = layer.walls.map((w, i) => {
     const id = `w${i}`;
     wallMap.set(w.id, id);
     return {
@@ -23,27 +24,31 @@ function minifyState(state) {
     };
   });
 
-  const minOpenings = state.openings.map((o, i) => ({
+  const minOpenings = layer.openings.map((o, i) => ({
     ...o,
     id: `o${i}`,
     wallId: wallMap.get(o.wallId)
   }));
 
-  return { nodes: minNodes, walls: minWalls, openings: minOpenings };
+  return { 
+    ...layer,
+    nodes: minNodes, 
+    walls: minWalls, 
+    openings: minOpenings 
+  };
 }
 
-// Helper to restore IDs (new UUIDs) on import
-function restoreState(minState) {
+function restoreLayer(minLayer) {
   const nodeMap = new Map();
   const wallMap = new Map();
 
-  const nodes = minState.nodes.map(n => {
+  const nodes = minLayer.nodes.map(n => {
     const id = crypto.randomUUID();
     nodeMap.set(n.id, id);
     return { ...n, id };
   });
 
-  const walls = minState.walls.map(w => {
+  const walls = minLayer.walls.map(w => {
     const id = crypto.randomUUID();
     wallMap.set(w.id, id);
     return {
@@ -54,40 +59,75 @@ function restoreState(minState) {
     };
   });
 
-  const openings = minState.openings.map(o => ({
+  const openings = minLayer.openings.map(o => ({
     ...o,
     id: crypto.randomUUID(),
     wallId: wallMap.get(o.wallId)
   }));
 
-  return { nodes, walls, openings };
+  return { 
+    ...minLayer,
+    // Ensure we have an ID
+    id: minLayer.id || crypto.randomUUID(),
+    nodes, 
+    walls, 
+    openings 
+  };
 }
 
 export function generateShareURL(state) {
-  const minified = minifyState(state);
-  const json = JSON.stringify(minified);
+  const minifiedLayers = state.layers.map(minifyLayer);
+  const minifiedState = {
+     layers: minifiedLayers,
+     activeLayerId: state.activeLayerId
+  };
+  
+  const json = JSON.stringify(minifiedState);
   const compressed = LZString.compressToEncodedURIComponent(json);
   
   const url = new URL(window.location.href);
   url.hash = compressed;
   
   const fullUrl = url.toString();
-  // Check limit (conservative 2000 chars)
-  if (fullUrl.length > 2000) return null;
+  if (fullUrl.length > 4000) return null; // Increased limit slightly, but still risky
   
   return fullUrl;
 }
 
 export function loadFromURL() {
   try {
-    const hash = window.location.hash.slice(1); // remove #
+    const hash = window.location.hash.slice(1); 
     if (!hash) return null;
 
     const json = LZString.decompressFromEncodedURIComponent(hash);
     if (!json) return null;
 
-    const minified = JSON.parse(json);
-    return restoreState(minified);
+    const parsed = JSON.parse(json);
+    
+    // Migration Logic (Legacy v1 URL)
+    if (parsed.nodes && parsed.walls) {
+       // Old format
+       const layer = restoreLayer({
+         ...parsed,
+         id: DEFAULT_LAYER_ID,
+         name: 'Imported',
+         type: 'wall',
+         visible: true,
+         height: 2.5
+       });
+       return { layers: [layer], activeLayerId: DEFAULT_LAYER_ID };
+    }
+
+    // New format
+    if (parsed.layers) {
+      const restoredLayers = parsed.layers.map(restoreLayer);
+      return {
+         layers: restoredLayers,
+         activeLayerId: parsed.activeLayerId || restoredLayers[0].id
+      };
+    }
+    
+    return null;
   } catch (e) {
     console.error("Failed to load from URL", e);
     return null;
@@ -96,17 +136,16 @@ export function loadFromURL() {
 
 export function exportToJSON(state) {
   const data = JSON.stringify({
-    nodes: state.nodes,
-    walls: state.walls,
-    openings: state.openings,
-    version: 1
+    layers: state.layers,
+    activeLayerId: state.activeLayerId,
+    version: 2
   }, null, 2);
   
   const blob = new Blob([data], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'archik-plan.json';
+  a.download = 'archik-plan-v2.json';
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -117,21 +156,36 @@ export function importFromJSON(file) {
     reader.onload = (e) => {
       try {
         const json = JSON.parse(e.target.result);
-        // Basic validation
-        if (!Array.isArray(json.nodes) || !Array.isArray(json.walls)) {
-          reject(new Error("Invalid file format"));
-          return;
+        
+        // v2
+        if (json.layers && Array.isArray(json.layers)) {
+           resolve({
+              layers: json.layers,
+              activeLayerId: json.activeLayerId || json.layers[0]?.id
+           });
+           return;
         }
-        // Use restoreState logic if we want to regenerate IDs, 
-        // OR just keep them if they are valid UUIDs.
-        // Let's keep them as is for File Import (assuming they are valid).
-        // But we should regenerate IDs to avoid collisions if merging (though here we replace).
-        // Let's just return raw json.
-        resolve({ 
-           nodes: json.nodes || [], 
-           walls: json.walls || [], 
-           openings: json.openings || [] 
-        });
+
+        // v1 (Legacy)
+        if (Array.isArray(json.nodes) && Array.isArray(json.walls)) {
+           const layer = {
+             id: DEFAULT_LAYER_ID,
+             name: 'Imported Layer',
+             type: 'wall',
+             visible: true,
+             height: 2.5,
+             nodes: json.nodes,
+             walls: json.walls,
+             openings: json.openings || []
+           };
+           resolve({
+             layers: [layer],
+             activeLayerId: DEFAULT_LAYER_ID
+           });
+           return;
+        }
+
+        reject(new Error("Invalid file format"));
       } catch (err) {
         reject(err);
       }

@@ -149,30 +149,73 @@ function Opening({ data, isDark }) {
   }
 }
 
-function ProceduralWall({ wall, isDark }) {
-  const { nodes, walls, openings, selectedWallIds, setSelection, setContextMenuData } = useStore();
+function ProceduralSlab({ layer, elevation, isDark }) {
+  const shape = useMemo(() => {
+    if (layer.walls.length === 0) return null;
+    
+    const shape = new THREE.Shape();
+    const edges = [...layer.walls];
+    const getNode = (id) => layer.nodes.find(n => n.id === id);
+    
+    // Start with the first wall
+    let current = edges.shift();
+    if (!current) return null;
+
+    let nStart = getNode(current.startNodeId);
+    let nEnd = getNode(current.endNodeId);
+    if (!nStart || !nEnd) return null;
+
+    shape.moveTo(nStart.x, -nStart.y);
+    shape.lineTo(nEnd.x, -nEnd.y);
+    
+    let tailId = current.endNodeId;
+    
+    // Greedy chain finder
+    while(edges.length > 0) {
+       const idx = edges.findIndex(w => w.startNodeId === tailId || w.endNodeId === tailId);
+       if (idx === -1) break; // Disconnected
+       
+       const nextWall = edges.splice(idx, 1)[0];
+       const isStart = nextWall.startNodeId === tailId;
+       const nextNodeId = isStart ? nextWall.endNodeId : nextWall.startNodeId;
+       
+       tailId = nextNodeId;
+       const p = getNode(tailId);
+       if (p) shape.lineTo(p.x, -p.y);
+    }
+
+    return shape;
+  }, [layer]);
+
+  if (!shape) return null;
+
+  return (
+    <mesh 
+      rotation={[-Math.PI / 2, 0, 0]} 
+      position={[0, elevation, 0]} 
+      castShadow 
+      receiveShadow
+    >
+      <extrudeGeometry args={[shape, { depth: layer.height, bevelEnabled: false }]} />
+      <meshStandardMaterial color={isDark ? "#1f2937" : "#9ca3af"} roughness={0.9} />
+    </mesh>
+  );
+}
+
+function ProceduralWall({ wall, layer, elevation, isDark }) {
+  // Read from layer prop, NOT global store for geometry
+  const { nodes, walls, openings } = layer; 
+  const { selectedWallIds, setSelection, setContextMenuData } = useStore();
   const isSelected = selectedWallIds.includes(wall.id);
   
   const geometry = useMemo(() => {
     const corners = computeWallCorners(wall, nodes, walls);
     if (corners.length < 4) return null;
     
-    // geometry.js returns: [StartRight, EndLeft, EndRight, StartLeft] 
-    // Wait, let's verify the "Fix" I made earlier in geometry.js
-    // It was: [Start+Right, End+Left, End+Right, Start+Left]
-    // So:
-    // 0: StartRight
-    // 1: EndLeft
-    // 2: EndRight
-    // 3: StartLeft
-    //
-    // Right Face runs from 0 (StartRight) to 2 (EndRight).
-    // Left Face runs from 3 (StartLeft) to 1 (EndLeft).
-    
-    const p0 = corners[0]; // StartRight
-    const p1 = corners[1]; // EndLeft
-    const p2 = corners[2]; // EndRight
-    const p3 = corners[3]; // StartLeft
+    const p0 = corners[0]; 
+    const p1 = corners[1]; 
+    const p2 = corners[2]; 
+    const p3 = corners[3]; 
     
     const startNode = nodes.find(n => n.id === wall.startNodeId);
     const endNode = nodes.find(n => n.id === wall.endNodeId);
@@ -192,35 +235,20 @@ function ProceduralWall({ wall, isDark }) {
       .filter(o => o.wallId === wall.id && wallLen >= o.width + 0.2)
       .sort((a, b) => a.dist - b.dist);
       
-    // Define Segments (t ranges)
-    // We have "Solid" segments and "Hole" segments.
-    // Logic: Current T cursor.
-    
     let t = 0;
-    const segments = []; // { t0, t1, type: 'solid' | 'hole', opening: op }
+    const segments = []; 
     
     myOpenings.forEach(op => {
       const halfW = (op.width / 2) / wallLen;
       const tStart = Math.max(0, op.dist - halfW);
       const tEnd = Math.min(1, op.dist + halfW);
-      
-      // Solid segment before this opening
-      if (tStart > t) {
-        segments.push({ t0: t, t1: tStart, type: 'solid' });
-      }
-      
-      // Hole segment
+      if (tStart > t) segments.push({ t0: t, t1: tStart, type: 'solid' });
       segments.push({ t0: tStart, t1: tEnd, type: 'hole', opening: op });
-      
       t = tEnd;
     });
     
-    // Final solid segment
-    if (t < 1) {
-      segments.push({ t0: t, t1: 1, type: 'solid' });
-    }
+    if (t < 1) segments.push({ t0: t, t1: 1, type: 'solid' });
     
-    // Build Geometry
     const vertices = [];
     const indices = [];
     let vCount = 0;
@@ -235,28 +263,15 @@ function ProceduralWall({ wall, isDark }) {
        vCount += 4;
     };
     
-    // Lerp helpers
     const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x)*t, y: a.y + (b.y - a.y)*t });
     
     const addBlock = (t0, t1, yBottom, yTop) => {
-      // Interpolate 2D corners at t0 and t1
-      // Right Face: p0 (StartRight) -> p1 (EndLeft = PhysRightEnd)
       const r0 = lerp(p0, p1, t0);
       const r1 = lerp(p0, p1, t1);
-      
-      // Left Face: p3 (StartLeft) -> p2 (EndRight = PhysLeftEnd)
       const l0 = lerp(p3, p2, t0);
       const l1 = lerp(p3, p2, t1);
       
-      // 3D Vertices (Y is up, Z is -y2d)
-      // We need 8 corners for the block:
-      // Bottom Ring:
-      // B_R0 (at t0, Right)
-      // B_L0 (at t0, Left)
-      // B_L1 (at t1, Left)
-      // B_R1 (at t1, Right)
-      
-      const to3D = (p, h) => ({ x: p.x, y: h, z: -p.y });
+      const to3D = (p, h) => ({ x: p.x, y: h + elevation, z: -p.y });
       
       const br0 = to3D(r0, yBottom);
       const bl0 = to3D(l0, yBottom);
@@ -268,47 +283,22 @@ function ProceduralWall({ wall, isDark }) {
       const tl1 = to3D(l1, yTop);
       const tr1 = to3D(r1, yTop);
       
-      // Faces
-      // Top (Face Up: Outward)
-      // LeftStart -> RightStart -> RightEnd -> LeftEnd
       pushQuad(tl0, tr0, tr1, tl1);
-      
-      // Bottom (Face Down: Outward)
-      // RightStart -> LeftStart -> LeftEnd -> RightEnd
       pushQuad(br0, bl0, bl1, br1);
-      
-      // Right Side (r0 -> r1)
       pushQuad(br0, br1, tr1, tr0);
-      // Left Side (l1 -> l0) -- Note direction for CCW normal
       pushQuad(bl1, bl0, tl0, tl1); 
       
-      // Start Cap (at t0) - Normal pointing back?
-      // Render only if strictly internal (hole) OR if it's a loose end (no neighbors)
-      if (t0 > 0.001 || !skipStartCap) {
-         // l0 -> r0
-         pushQuad(bl0, br0, tr0, tl0); 
-      }
-      
-      // End Cap (at t1) - Normal pointing forward?
-      if (t1 < 0.999 || !skipEndCap) {
-         // l1 -> r1 (LeftEnd -> RightEnd)
-         pushQuad(bl1, br1, tr1, tl1);
-      }
+      if (t0 > 0.001 || !skipStartCap) pushQuad(bl0, br0, tr0, tl0); 
+      if (t1 < 0.999 || !skipEndCap) pushQuad(bl1, br1, tr1, tl1);
     };
     
     segments.forEach(seg => {
       if (seg.type === 'solid') {
-        addBlock(seg.t0, seg.t1, 0, WALL_HEIGHT);
+        addBlock(seg.t0, seg.t1, 0, layer.height);
       } else {
         const op = seg.opening;
-        // Sill
-        if (op.y > 0) {
-          addBlock(seg.t0, seg.t1, 0, op.y);
-        }
-        // Header
-        if (op.y + op.height < WALL_HEIGHT) {
-          addBlock(seg.t0, seg.t1, op.y + op.height, WALL_HEIGHT);
-        }
+        if (op.y > 0) addBlock(seg.t0, seg.t1, 0, op.y);
+        if (op.y + op.height < layer.height) addBlock(seg.t0, seg.t1, op.y + op.height, layer.height);
       }
     });
 
@@ -317,7 +307,7 @@ function ProceduralWall({ wall, isDark }) {
     geo.setIndex(indices);
     geo.computeVertexNormals();
     return geo;
-  }, [wall, nodes, walls, openings]);
+  }, [wall, nodes, walls, openings, elevation, layer.height]);
 
   const wallOpenings = useMemo(() => {
      const start = nodes.find(n => n.id === wall.startNodeId);
@@ -338,7 +328,7 @@ function ProceduralWall({ wall, isDark }) {
         
         return {
            id: op.id,
-           pos: [cx, op.y + op.height/2, cy],
+           pos: [cx, op.y + op.height/2 + elevation, cy],
            rot: [0, angle - Math.PI/2, 0],
            size: [op.width, op.height, wall.thickness + 0.04],
            type: op.type,
@@ -346,7 +336,7 @@ function ProceduralWall({ wall, isDark }) {
            isFlipped: op.isFlipped
         };
      });
-  }, [wall, nodes, openings]);
+  }, [wall, nodes, openings, elevation]);
 
   if (!geometry) return null;
 
@@ -375,8 +365,16 @@ function ProceduralWall({ wall, isDark }) {
 }
 
 export default function Viewport3D() {
-  const { walls, theme, setSelection, setContextMenuData } = useStore();
+  const { layers, theme, setSelection, setContextMenuData } = useStore();
   const isDark = theme === 'dark';
+
+  const visibleLayers = layers.filter(l => l.visible);
+  let cumulativeHeight = 0;
+  const layerStack = visibleLayers.map(layer => {
+    const elevation = cumulativeHeight;
+    cumulativeHeight += layer.height;
+    return { layer, elevation };
+  });
 
   return (
     <div className="w-full h-full relative z-0">
@@ -408,9 +406,29 @@ export default function Viewport3D() {
 
         <Floor isDark={isDark} />
         
-        {walls.map(wall => (
-          <ProceduralWall key={wall.id} wall={wall} isDark={isDark} />
-        ))}
+        {layerStack.map(({ layer, elevation }) => {
+          if (layer.type === 'wall') {
+            return layer.walls.map(wall => (
+              <ProceduralWall 
+                key={wall.id} 
+                wall={wall} 
+                layer={layer} 
+                elevation={elevation} 
+                isDark={isDark} 
+              />
+            ));
+          } else if (layer.type === 'floor') {
+            return (
+              <ProceduralSlab 
+                key={layer.id} 
+                layer={layer} 
+                elevation={elevation} 
+                isDark={isDark} 
+              />
+            );
+          }
+          return null;
+        })}
         
       </Canvas>
     </div>
