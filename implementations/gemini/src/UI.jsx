@@ -147,6 +147,38 @@ function HistoryModal({ onClose }) {
   );
 }
 
+function AutoSaver() {
+  const { createSnapshot, projectMeta } = useStore();
+  const lastSnapshotTime = useRef(Date.now());
+  const isDirty = useRef(false);
+  
+  useEffect(() => {
+    const unsub = useStore.subscribe((state, prevState) => {
+      if (state.layers !== prevState.layers || state.projectMeta !== prevState.projectMeta) {
+        isDirty.current = true;
+      }
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      // Auto-save every 30 seconds if dirty
+      if (isDirty.current && now - lastSnapshotTime.current > 30000) {
+        createSnapshot(`Auto-save ${new Date().toLocaleTimeString()}`);
+        lastSnapshotTime.current = now;
+        isDirty.current = false;
+        console.log("Auto-saved!");
+      }
+    }, 5000); // Check every 5s
+
+    return () => clearInterval(interval);
+  }, [createSnapshot]);
+
+  return null;
+}
+
 export default function UI() {
   const { 
     mode, setMode, reset, 
@@ -504,6 +536,7 @@ export default function UI() {
 
       {showMeta && <MetadataModal onClose={() => setShowMeta(false)} />}
       {showHistory && <HistoryModal onClose={() => setShowHistory(false)} />}
+      <AutoSaver />
     </>
   );
 }

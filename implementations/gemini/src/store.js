@@ -22,9 +22,15 @@ export const useStore = create((set) => ({
 
   // Project Metadata
   projectMeta: {
-    title: 'Untitled Project',
+    title: (() => {
+      const adjs = ['Modern', 'Cozy', 'Brutalist', 'Floating', 'Hidden', 'Solar', 'Lunar', 'Neon'];
+      const nouns = ['Villa', 'Bunker', 'Loft', 'Sanctuary', 'Outpost', 'Station', 'Tower', 'Cube'];
+      const suffix = ['Alpha', 'Beta', 'X', 'Z', 'Prime', 'Flow', 'Mind'];
+      const r = (arr) => arr[Math.floor(Math.random() * arr.length)];
+      return `${r(adjs)} ${r(nouns)} ${r(suffix)}`;
+    })(),
     description: '',
-    author: 'Anonymous',
+    author: 'archik',
     created: Date.now(),
     modified: Date.now()
   },
@@ -460,9 +466,15 @@ export const useStore = create((set) => ({
     activeLayerId: DEFAULT_LAYER_ID,
     viewState: { x: 0, y: 0, zoom: 1 },
     projectMeta: {
-      title: 'Untitled Project',
+      title: (() => {
+        const adjs = ['Modern', 'Cozy', 'Brutalist', 'Floating', 'Hidden', 'Solar', 'Lunar', 'Neon'];
+        const nouns = ['Villa', 'Bunker', 'Loft', 'Sanctuary', 'Outpost', 'Station', 'Tower', 'Cube'];
+        const suffix = ['Alpha', 'Beta', 'X', 'Z', 'Prime', 'Flow', 'Mind'];
+        const r = (arr) => arr[Math.floor(Math.random() * arr.length)];
+        return `${r(adjs)} ${r(nouns)} ${r(suffix)}`;
+      })(),
       description: '',
-      author: 'Anonymous',
+      author: 'archik',
       created: Date.now(),
       modified: Date.now()
     },
