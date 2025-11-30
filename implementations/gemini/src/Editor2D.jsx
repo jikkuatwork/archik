@@ -1,7 +1,10 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useStore } from './store';
 
+const GRID_STEP = 0.2;
+
 export default function Editor2D() {
+  const snap = (val) => Math.round(val / GRID_STEP) * GRID_STEP;
   const { 
     layers, activeLayerId, mode, 
     addNode, addWall, updateNode, 
@@ -70,6 +73,7 @@ export default function Editor2D() {
 
   const handlePointerDown = (e) => {
     const worldPos = toWorld(e.clientX, e.clientY);
+    const snappedPos = { x: snap(worldPos.x), y: snap(worldPos.y) };
     
     // Pan: Space OR Shift + Left Click OR Middle Mouse OR Right Click
     const isPan = 
@@ -87,7 +91,7 @@ export default function Editor2D() {
 
     // ... (rest of tool logic)
     
-    // Check Node Hit
+    // Check Node Hit (Use RAW pos for selection to allow selecting off-grid nodes)
     const hitNode = nodes.find(n => Math.hypot(n.x - worldPos.x, n.y - worldPos.y) < toWorldScale(10)); // 10px hit radius
     
     if (mode === 'IDLE') {
@@ -149,8 +153,7 @@ export default function Editor2D() {
        
        if (!targetId) {
           // Snap to grid/axis?
-          // For now just add node
-          targetId = addNode(worldPos.x, worldPos.y);
+          targetId = addNode(snappedPos.x, snappedPos.y);
        }
        
        if (!drawingStartNode) {
@@ -172,13 +175,15 @@ export default function Editor2D() {
     }
 
     const worldPos = toWorld(e.clientX, e.clientY);
-    setMousePos(worldPos);
+    const snappedPos = { x: snap(worldPos.x), y: snap(worldPos.y) };
+    
+    setMousePos(snappedPos); // Snap preview cursor
 
     if (dragStart) {
-       updateNode(dragStart.id, worldPos.x, worldPos.y);
+       updateNode(dragStart.id, snappedPos.x, snappedPos.y); // Snap dragging
     }
     
-    // Hover logic
+    // Hover logic (use RAW pos)
     const hitNode = nodes.find(n => Math.hypot(n.x - worldPos.x, n.y - worldPos.y) < toWorldScale(10));
     setHoveredNodeId(hitNode ? hitNode.id : null);
   };
@@ -207,9 +212,18 @@ export default function Editor2D() {
   // Grid Rendering
   const gridSize = 100;
   const gridLines = [];
-  for (let i = -gridSize; i <= gridSize; i++) {
-     gridLines.push(<line key={`v${i}`} x1={i} y1={-gridSize} x2={i} y2={gridSize} stroke="#ddd" strokeWidth={0.02} />);
-     gridLines.push(<line key={`h${i}`} x1={-gridSize} y1={i} x2={gridSize} y2={i} stroke="#ddd" strokeWidth={0.02} />);
+  const numSteps = Math.floor(gridSize / GRID_STEP);
+
+  for (let i = -numSteps; i <= numSteps; i++) {
+     const pos = i * GRID_STEP;
+     const isMajor = i % 5 === 0;
+     const strokeClass = isMajor 
+        ? "stroke-gray-300 dark:stroke-gray-600" 
+        : "stroke-gray-200 dark:stroke-gray-800";
+     const width = isMajor ? 1.5 : 0.5; // Pixels (roughly)
+
+     gridLines.push(<line key={`v${i}`} x1={pos} y1={-gridSize} x2={pos} y2={gridSize} strokeWidth={width} className={strokeClass} vectorEffect="non-scaling-stroke" />);
+     gridLines.push(<line key={`h${i}`} x1={-gridSize} y1={pos} x2={gridSize} y2={pos} strokeWidth={width} className={strokeClass} vectorEffect="non-scaling-stroke" />);
   }
 
   return (
@@ -257,7 +271,7 @@ export default function Editor2D() {
           ))}
 
           {/* Grid */}
-          <g className="dark:opacity-10">{gridLines}</g>
+          <g>{gridLines}</g>
           
           {/* Walls */}
           {walls.map(wall => {
@@ -276,7 +290,7 @@ export default function Editor2D() {
                  stroke={isSelected ? "#3b82f6" : (isHovered ? "#6b7280" : "black")}
                  strokeWidth={wall.thickness}
                  strokeLinecap="round"
-                 className="dark:stroke-gray-300 transition-colors"
+                 className={`transition-colors ${isSelected || isHovered ? '' : 'dark:stroke-gray-300'}`}
                />
             );
           })}

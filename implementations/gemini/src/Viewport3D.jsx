@@ -938,10 +938,21 @@ export default function Viewport3D() {
 }
 
 function Floor({ isDark }) {
+  // Major = 1m, Minor = 0.2m
+  // Colors adapted to match 2D editor feel
+  const majorColor = isDark ? "#4b5563" : "#9ca3af"; // Gray-600 / Gray-400
+  const minorColor = isDark ? "#1f2937" : "#e5e7eb"; // Gray-800 / Gray-200
+
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-      <planeGeometry args={[100, 100]} />
-      <meshStandardMaterial color={isDark ? "#111827" : "#f5f5f7"} />
-    </mesh>
+    <group position={[0, -0.01, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[200, 200]} />
+        <meshStandardMaterial color={isDark ? "#111827" : "#f9fafb"} />
+      </mesh>
+      {/* Major Grid (1m) */}
+      <gridHelper args={[200, 200, majorColor, majorColor]} position={[0, 0.01, 0]} />
+      {/* Minor Grid (0.2m) */}
+      <gridHelper args={[200, 1000, minorColor, minorColor]} position={[0, 0.01, 0]} />
+    </group>
   );
 }
