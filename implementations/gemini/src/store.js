@@ -275,6 +275,45 @@ export const useStore = create((set) => ({
     });
     return id;
   },
+
+  splitWall: (wallId, x, y) => {
+    let newNodeId = null;
+    set((state) => {
+      const targetLayer = state.layers.find(l => l.walls.some(w => w.id === wallId));
+      if (!targetLayer) return state;
+
+      const wallToSplit = targetLayer.walls.find(w => w.id === wallId);
+      if (!wallToSplit) return state;
+
+      newNodeId = crypto.randomUUID();
+      const newWallId = crypto.randomUUID();
+
+      const newNodes = [...targetLayer.nodes, { id: newNodeId, x, y }];
+      
+      const updatedWalls = targetLayer.walls.map(w => {
+         if (w.id === wallId) {
+             return { ...w, endNodeId: newNodeId };
+         }
+         return w;
+      });
+
+      updatedWalls.push({
+          id: newWallId,
+          startNodeId: newNodeId,
+          endNodeId: wallToSplit.endNodeId,
+          thickness: wallToSplit.thickness
+      });
+
+      return {
+          layers: state.layers.map(l => l.id === targetLayer.id ? {
+              ...l,
+              nodes: newNodes,
+              walls: updatedWalls
+          } : l)
+      };
+    });
+    return newNodeId;
+  },
   
   addOpening: (wallId, type) => {
     const id = crypto.randomUUID();

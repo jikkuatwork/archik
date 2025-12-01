@@ -566,7 +566,7 @@ function ProceduralWall({ wall, layer, elevation, isDark, height = 2.5, override
       pushQuad(bl1, bl0, tl0, tl1); 
       
       if (t0 > 0.001 || !skipStartCap) pushQuad(bl0, br0, tr0, tl0); 
-      if (t1 < 0.999 || !skipEndCap) pushQuad(bl1, br1, tr1, tl1);
+      if (t1 < 0.999 || !skipEndCap) pushQuad(br1, bl1, tl1, tr1);
     };
     
     segments.forEach(seg => {

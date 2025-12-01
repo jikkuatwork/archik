@@ -7,7 +7,7 @@ export default function Editor2D() {
   const snap = (val) => Math.round(val / GRID_STEP) * GRID_STEP;
   const { 
     layers, activeLayerId, mode, 
-    addNode, addWall, updateNode, 
+    addNode, addWall, updateNode, splitWall, deleteSelection,
     hoveredNodeId, hoveredWallId, setHoveredNodeId,
     selectedNodeIds, selectedWallIds, setSelection, setContextMenuData,
     drawingStartNode, setDrawingStartNode,
@@ -19,6 +19,19 @@ export default function Editor2D() {
   const [panStart, setPanStart] = useState(null); // For canvas panning
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); // World coordinates
   const [dimensions, setDimensions] = useState({ w: 0, h: 0 });
+
+  // Delete Shortcut
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedNodeIds.length > 0 || selectedWallIds.length > 0) {
+           deleteSelection();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNodeIds, selectedWallIds, deleteSelection]);
 
   useEffect(() => {
     const updateSize = () => {
@@ -71,6 +84,44 @@ export default function Editor2D() {
      }
   }, [handleWheel]);
 
+  const getClosestWall = (p) => {
+      let bestWall = null;
+      let minDst = 0.2 / viewState.zoom;
+      let bestPoint = null;
+
+      walls.forEach(w => {
+         const start = nodes.find(n => n.id === w.startNodeId);
+         const end = nodes.find(n => n.id === w.endNodeId);
+         if (!start || !end) return;
+         
+         const A = p.x - start.x;
+         const B = p.y - start.y;
+         const C = end.x - start.x;
+         const D = end.y - start.y;
+         
+         const dot = A * C + B * D;
+         const lenSq = C * C + D * D;
+         let param = -1;
+         if (lenSq !== 0) param = dot / lenSq;
+         
+         let xx, yy;
+         if (param < 0) { xx = start.x; yy = start.y; }
+         else if (param > 1) { xx = end.x; yy = end.y; }
+         else { xx = start.x + param * C; yy = start.y + param * D; }
+         
+         const dx = p.x - xx;
+         const dy = p.y - yy;
+         const dst = Math.sqrt(dx * dx + dy * dy);
+         
+         if (dst < minDst) {
+            minDst = dst;
+            bestWall = w;
+            bestPoint = { x: xx, y: yy };
+         }
+      });
+      return { wall: bestWall, point: bestPoint };
+  };
+
   const handlePointerDown = (e) => {
     const worldPos = toWorld(e.clientX, e.clientY);
     const snappedPos = { x: snap(worldPos.x), y: snap(worldPos.y) };
@@ -102,43 +153,10 @@ export default function Editor2D() {
          e.stopPropagation();
        } else {
           // Check Wall Hit
-          // Simple distance check to line segments
-          let bestWall = null;
-          let minDst = 0.2 / viewState.zoom;
+          const { wall } = getClosestWall(worldPos);
           
-          walls.forEach(w => {
-             const start = nodes.find(n => n.id === w.startNodeId);
-             const end = nodes.find(n => n.id === w.endNodeId);
-             if (!start || !end) return;
-             
-             // Point to segment distance
-             const A = worldPos.x - start.x;
-             const B = worldPos.y - start.y;
-             const C = end.x - start.x;
-             const D = end.y - start.y;
-             
-             const dot = A * C + B * D;
-             const lenSq = C * C + D * D;
-             let param = -1;
-             if (lenSq !== 0) param = dot / lenSq;
-             
-             let xx, yy;
-             if (param < 0) { xx = start.x; yy = start.y; }
-             else if (param > 1) { xx = end.x; yy = end.y; }
-             else { xx = start.x + param * C; yy = start.y + param * D; }
-             
-             const dx = worldPos.x - xx;
-             const dy = worldPos.y - yy;
-             const dst = Math.sqrt(dx * dx + dy * dy);
-             
-             if (dst < minDst) {
-                minDst = dst;
-                bestWall = w;
-             }
-          });
-          
-          if (bestWall) {
-             setSelection({ nodes: [], walls: [bestWall.id] });
+          if (wall) {
+             setSelection({ nodes: [], walls: [wall.id] });
              setContextMenuData({ x: e.clientX, y: e.clientY });
           } else {
              setSelection({ nodes: [], walls: [] });
@@ -152,8 +170,14 @@ export default function Editor2D() {
        let targetId = hitNode ? hitNode.id : null;
        
        if (!targetId) {
-          // Snap to grid/axis?
-          targetId = addNode(snappedPos.x, snappedPos.y);
+          // Try to split wall
+          const { wall, point } = getClosestWall(worldPos);
+          if (wall) {
+              targetId = splitWall(wall.id, point.x, point.y);
+          } else {
+              // Snap to grid/axis?
+              targetId = addNode(snappedPos.x, snappedPos.y);
+          }
        }
        
        if (!drawingStartNode) {
