@@ -184,6 +184,7 @@ export default function UI() {
     mode, setMode, reset, 
     selectedWallIds, selectedNodeIds, deleteSelection, setWallOpening, toggleOpeningStatus, flipOpening,
     setWallRailing, setRailingGate, toggleRailingGate,
+    addAttachment, updateAttachment,
     layers, activeLayerId, setAll,
     contextMenuData, theme, toggleTheme,
     setSelection, setContextMenuData,
@@ -249,6 +250,24 @@ export default function UI() {
       }
     }
   };
+  
+  const handleFlipStairSide = (wallId) => {
+      const layer = layers.find(l => l.walls.some(w => w.id === wallId));
+      if (!layer || !layer.attachments) return;
+      const stair = layer.attachments.find(a => a.wallId === wallId && a.type === 'stairs');
+      if (stair) {
+          updateAttachment(stair.id, { side: stair.side === 'left' ? 'right' : 'left' });
+      }
+  };
+
+  const handleFlipStairDir = (wallId) => {
+      const layer = layers.find(l => l.walls.some(w => w.id === wallId));
+      if (!layer || !layer.attachments) return;
+      const stair = layer.attachments.find(a => a.wallId === wallId && a.type === 'stairs');
+      if (stair) {
+          updateAttachment(stair.id, { riseDir: stair.riseDir === 'asc' ? 'desc' : 'asc' });
+      }
+  };
 
   // Context Logic: Find the layer of the selected wall
   let hasWindow = false;
@@ -258,6 +277,8 @@ export default function UI() {
   let hasRailing = false;
   let hasGate = false;
   let isGateOpen = false;
+  let hasStairs = false;
+  let hasCounter = false;
   
   if (selectedWallIds.length === 1) {
     const wallId = selectedWallIds[0];
@@ -269,6 +290,11 @@ export default function UI() {
          hasWindow = wallOpenings.some(o => o.type === 'window');
          hasDoor = wallOpenings.some(o => o.type === 'door');
          if (wallOpenings.length > 0) isOpen = wallOpenings[0].isOpen;
+
+         const wallAttachments = targetLayer.attachments || [];
+         hasStairs = wallAttachments.some(a => a.wallId === wallId && a.type === 'stairs');
+         hasCounter = wallAttachments.some(a => a.wallId === wallId && a.type === 'counter');
+
        } else if (targetLayer.type === 'floor') {
          isFloor = true;
          const w = targetLayer.walls.find(w => w.id === wallId);
@@ -319,6 +345,36 @@ export default function UI() {
                   label="Door"
                 />
                 
+                <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
+                
+                <ToolButton 
+                  active={hasStairs}
+                  onClick={() => addAttachment(selectedWallIds[0], 'stairs')}
+                  icon={<span className="text-xs font-bold">Stairs</span>} // Placeholder Icon
+                  label="Stairs"
+                />
+                {hasStairs && (
+                   <>
+                     <ToolButton 
+                        onClick={() => handleFlipStairSide(selectedWallIds[0])}
+                        icon={<span className="text-xs font-bold">FlipS</span>}
+                        label="Swap Side"
+                     />
+                     <ToolButton 
+                        onClick={() => handleFlipStairDir(selectedWallIds[0])}
+                        icon={<span className="text-xs font-bold">FlipD</span>}
+                        label="Swap Dir"
+                     />
+                   </>
+                )}
+                
+                <ToolButton 
+                  active={hasCounter}
+                  onClick={() => addAttachment(selectedWallIds[0], 'counter')}
+                  icon={<span className="text-xs font-bold">Desk</span>} // Placeholder Icon
+                  label="Counter"
+                />
+
                 {(hasWindow || hasDoor) && (
                   <>
                     <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />

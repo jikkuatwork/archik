@@ -479,6 +479,297 @@ function ProceduralSlab({ layer, elevation, isDark }) {
   );
 }
 
+function ProceduralStairs({ data, wallHeight, isDark }) {
+  const { width, length, riseDir } = data; 
+  const isAsc = riseDir !== 'desc';
+  
+  // Dimensions
+  const flightWidth = width / 2 - 0.05; // Gap of 0.1 total
+  const gap = 0.1;
+  const landingLen = 1.0;
+  const runLen = length - landingLen; // Space for steps
+  
+  // Steps
+  const stepsPerRun = 8;
+  const totalRises = stepsPerRun * 2 + 2; // Run1 + Run2 + MidLanding + TopLanding
+  const risePerStep = wallHeight / totalRises;
+  const stepRun = runLen / stepsPerRun;
+
+  const color = isDark ? "#374151" : "#e5e7eb";
+  const treadColor = isDark ? "#4b5563" : "#d1d5db";
+  const railColor = isDark ? "#1f2937" : "#9ca3af";
+  const glassColor = "#a5f3fc";
+
+  // Standardize Geometry Generation (Always Ascending Left-to-Right)
+  // We mirror the whole group for 'desc'.
+  const dir = 1; 
+  const startX = -length/2;
+  
+  const zInner = -width/2 + flightWidth/2;
+  const zOuter = width/2 - flightWidth/2;
+  
+  const steps = [];
+  
+  // --- Run 1 (Inner, Wall Side) ---
+  // Ascends from X=Start to X=End-Landing
+  for (let i = 0; i < stepsPerRun; i++) {
+     steps.push({
+        x: startX + i * stepRun + stepRun/2,
+        y: i * risePerStep,
+        z: zInner,
+        len: stepRun,
+        w: flightWidth,
+        type: 'step'
+     });
+  }
+  
+  // --- Mid Landing ---
+  // At X=End, Full Width
+  const midLandingY = stepsPerRun * risePerStep;
+  steps.push({
+     x: startX + runLen + landingLen/2,
+     y: midLandingY,
+     z: 0, // Center
+     len: landingLen,
+     w: width, // Full width
+     type: 'landing'
+  });
+  
+  // --- Run 2 (Outer) ---
+  // Ascends from X=End-Landing BACK to X=Start
+  const run2StartY = midLandingY + risePerStep;
+  for (let i = 0; i < stepsPerRun; i++) {
+     steps.push({
+        x: (startX + runLen - stepRun/2) - i * stepRun,
+        y: run2StartY + i * risePerStep,
+        z: zOuter,
+        len: stepRun,
+        w: flightWidth,
+        type: 'step'
+     });
+  }
+  
+  // --- Top Landing ---
+  // At X=Start (Top of Run 2) - Shifted OUTWARD (Left if asc)
+  const topLandingY = run2StartY + stepsPerRun * risePerStep;
+  const topLandingX = startX - dir * landingLen/2;
+  
+  steps.push({
+     x: topLandingX,
+     y: topLandingY,
+     z: zOuter,
+     len: landingLen,
+     w: flightWidth,
+     type: 'landing'
+  });
+
+  // --- Railing Generation ---
+  
+  const railHeight = 0.9;
+  const railRadius = 0.025;
+  const postRadius = 0.02;
+
+  // Helper to make a rail strip
+  const makeStrip = (points) => {
+     const segments = [];
+     const posts = [];
+     
+     for(let i=0; i<points.length-1; i++) {
+        const p1 = points[i];
+        const p2 = points[i+1];
+        
+        // Handrail
+        const r1 = p1.clone().add(new THREE.Vector3(0, railHeight, 0));
+        const r2 = p2.clone().add(new THREE.Vector3(0, railHeight, 0));
+        
+        segments.push({
+           start: r1, end: r2,
+           bl: p1.clone().add(new THREE.Vector3(0, 0.1, 0)),
+           br: p2.clone().add(new THREE.Vector3(0, 0.1, 0)),
+           tl: r1.clone().add(new THREE.Vector3(0, -0.05, 0)),
+           tr: r2.clone().add(new THREE.Vector3(0, -0.05, 0))
+        });
+        
+        if (i===0) posts.push({ pos: p1, h: railHeight });
+        posts.push({ pos: p2, h: railHeight });
+     }
+     return { segments, posts };
+  };
+
+  // Strip 1: Outer Edge of Run 2 + Top Landing
+  // Top Landing End (Outward) -> Run 2 Start -> Mid Landing Corner
+  const outerZ = width/2 - 0.05;
+  const strip1Pts = [
+     new THREE.Vector3(startX - dir * landingLen, topLandingY + risePerStep, outerZ), // Top Landing Far End
+     new THREE.Vector3(startX + runLen, run2StartY, outerZ), // Run 2 Bottom / Mid Landing Start
+     new THREE.Vector3(startX + runLen + landingLen, midLandingY, outerZ) // Mid Landing Corner
+  ];
+  
+  // Strip 2: Side of Mid Landing
+  // Mid Landing Corner -> Mid Landing Inner Corner (Turn to well)
+  // Actually, let's wrap around.
+  
+  // Strip 3: Well (Gap)
+  // Run 1 Inner Edge -> Mid Landing Inner -> Run 2 Inner Edge
+  const wellZ1 = zInner + flightWidth/2 + 0.05; // Right side of Run 1
+  const wellZ2 = zOuter - flightWidth/2 - 0.05; // Left side of Run 2
+  
+  const wellPts = [
+     new THREE.Vector3(startX, 0 + risePerStep, wellZ1), // Start Run 1
+     new THREE.Vector3(startX + runLen, midLandingY, wellZ1), // Top Run 1
+     new THREE.Vector3(startX + runLen, midLandingY, wellZ2), // Turn across well
+     new THREE.Vector3(startX - dir * landingLen, topLandingY + risePerStep, wellZ2) // Top Run 2 + Landing Inner
+  ];
+
+  const strips = [
+     makeStrip(strip1Pts),
+     makeStrip(wellPts)
+  ];
+
+  const Tube = ({ start, end }) => {
+    const len = start.distanceTo(end);
+    if (len < 0.001) return null;
+    const mid = start.clone().add(end).multiplyScalar(0.5);
+    const direction = end.clone().sub(start).normalize();
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+    return (
+      <mesh position={mid} quaternion={quaternion} castShadow>
+        <cylinderGeometry args={[railRadius, railRadius, len]} />
+        <meshStandardMaterial color={railColor} />
+      </mesh>
+    );
+  };
+  
+  const GlassPanel = ({ bl, br, tr, tl }) => {
+     const geometry = useMemo(() => {
+        const geo = new THREE.BufferGeometry();
+        const vertices = [
+           bl.x, bl.y, bl.z,
+           br.x, br.y, br.z,
+           tr.x, tr.y, tr.z,
+           tl.x, tl.y, tl.z
+        ];
+        const indices = [0, 1, 2, 0, 2, 3];
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+        return geo;
+     }, [bl, br, tr, tl]);
+     return (
+       <mesh geometry={geometry} receiveShadow>
+          <meshPhysicalMaterial color={glassColor} transparent opacity={0.3} roughness={0.1} metalness={0.1} side={THREE.DoubleSide} />
+       </mesh>
+     );
+  };
+
+  return (
+    <group scale={[isAsc ? 1 : -1, 1, 1]}> {/* Flip X if Desc */}
+      {/* Steps */}
+      {steps.map((s, i) => (
+         <group key={i} position={[s.x, s.y, s.z]}>
+           <mesh position={[0, risePerStep/2, 0]} castShadow receiveShadow>
+             <boxGeometry args={[s.len, risePerStep, s.w]} />
+             <meshStandardMaterial color={color} />
+           </mesh>
+           <mesh position={[0, risePerStep, 0]} castShadow receiveShadow>
+              <boxGeometry args={[s.len, 0.02, s.w + 0.02]} />
+              <meshStandardMaterial color={treadColor} />
+           </mesh>
+         </group>
+      ))}
+      
+      {/* Railings */}
+      {strips.map((strip, sIdx) => (
+         <group key={`strip-${sIdx}`}>
+            {strip.segments.map((seg, i) => (
+              <group key={`seg-${i}`}>
+                 <Tube start={seg.start} end={seg.end} />
+                 <GlassPanel bl={seg.bl} br={seg.br} tr={seg.tr} tl={seg.tl} />
+              </group>
+            ))}
+            {strip.posts.map((post, i) => (
+               <mesh key={`post-${i}`} position={[post.pos.x, post.pos.y + post.h/2, post.pos.z]} castShadow>
+                  <cylinderGeometry args={[postRadius, postRadius, post.h]} />
+                  <meshStandardMaterial color={railColor} />
+               </mesh>
+            ))}
+         </group>
+      ))}
+    </group>
+  );
+}
+
+function ProceduralCounter({ data, isDark }) {
+  const { width, length, height } = data;
+  const depth = width; // Width in data is depth from wall
+  
+  const bodyColor = isDark ? "#1f2937" : "#f3f4f6"; // Cabinet
+  const topColor = isDark ? "#111827" : "#374151";   // Countertop
+  
+  return (
+    <group position={[0, height/2, 0]}>
+       {/* Cabinet Body */}
+       <mesh position={[0, 0, 0]} castShadow receiveShadow>
+         <boxGeometry args={[length, height, depth - 0.05]} />
+         <meshStandardMaterial color={bodyColor} />
+       </mesh>
+       {/* Countertop */}
+       <mesh position={[0, height/2 + 0.02, 0.025]} castShadow receiveShadow>
+         <boxGeometry args={[length + 0.05, 0.04, depth]} />
+         <meshStandardMaterial color={topColor} roughness={0.2} />
+       </mesh>
+    </group>
+  );
+}
+
+function WallAttachments({ wall, layer, elevation, isDark }) {
+  const { nodes, attachments } = layer;
+  const myAttachments = (attachments || []).filter(a => a.wallId === wall.id);
+  
+  if (myAttachments.length === 0) return null;
+
+  const startNode = nodes.find(n => n.id === wall.startNodeId);
+  const endNode = nodes.find(n => n.id === wall.endNodeId);
+  if (!startNode || !endNode) return null;
+
+  const dx = endNode.x - startNode.x;
+  const dy = -(endNode.y - startNode.y);
+  const wallAngle = Math.atan2(dy, dx); 
+  const wallLen = Math.hypot(dx, dy);
+
+  return (
+    <>
+      {myAttachments.map(att => {
+         if (wallLen < att.length) return null; // Hide if doesn't fit
+
+         // Center X,Z along wall
+         const cx = startNode.x + (endNode.x - startNode.x) * att.dist;
+         const cz = -(startNode.y + (endNode.y - startNode.y) * att.dist);
+         
+         const sideMult = att.side === 'left' ? -1 : 1;
+         const perpDist = (wall.thickness/2 + att.width/2);
+         
+         return (
+           <group 
+             key={att.id} 
+             position={[cx, elevation, cz]} 
+             rotation={[0, -wallAngle, 0]} // X is Along Wall
+           >
+             <group position={[0, 0, sideMult * perpDist]}>
+                   {att.type === 'stairs' && (
+                     <ProceduralStairs data={att} wallHeight={layer.height} isDark={isDark} />
+                   )}
+                   {att.type === 'counter' && (
+                     <ProceduralCounter data={att} isDark={isDark} />
+                   )}
+             </group>
+           </group>
+         );
+      })}
+    </>
+  );
+}
+
 function ProceduralWall({ wall, layer, elevation, isDark, height = 2.5, overrideColor }) {
   // Read from layer prop, NOT global store for geometry
   const { nodes, walls, openings } = layer; 
@@ -638,6 +929,7 @@ function ProceduralWall({ wall, layer, elevation, isDark, height = 2.5, override
       {wallOpenings.map((op) => op && (
          <Opening key={op.id} data={op} isDark={isDark} />
       ))}
+      <WallAttachments wall={wall} layer={layer} elevation={elevation} isDark={isDark} />
     </group>
   );
 }

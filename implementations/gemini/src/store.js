@@ -87,7 +87,8 @@ export const useStore = create((set) => ({
         { id: 'w3', startNodeId: 'n3', endNodeId: 'n4', thickness: 0.2 },
         { id: 'w4', startNodeId: 'n4', endNodeId: 'n1', thickness: 0.2 },
       ],
-      openings: []
+      openings: [],
+      attachments: []
     }
   ],
 
@@ -105,7 +106,8 @@ export const useStore = create((set) => ({
       height: type === 'wall' ? 2.5 : 0.2,
       nodes: [],
       walls: [],
-      openings: []
+      openings: [],
+      attachments: []
     };
     return { 
       layers: [...state.layers, newLayer],
@@ -166,13 +168,20 @@ export const useStore = create((set) => ({
        wallId: idMap.get(o.wallId)
     }));
 
+    const newAttachments = (source.attachments || []).map(a => ({
+       ...a,
+       id: crypto.randomUUID(),
+       wallId: idMap.get(a.wallId)
+    }));
+
     const newLayer = {
       ...source,
       id: crypto.randomUUID(),
       name: source.name + ' (Copy)',
       nodes: newNodes,
       walls: newWalls,
-      openings: newOpenings
+      openings: newOpenings,
+      attachments: newAttachments
     };
 
     return { 
@@ -216,8 +225,9 @@ export const useStore = create((set) => ({
         const newNodes = layer.nodes.filter(n => !nodesToDelete.has(n.id));
         const newWalls = layer.walls.filter(w => !layerWallsToDelete.has(w.id));
         const newOpenings = layer.openings.filter(o => !layerWallsToDelete.has(o.wallId));
+        const newAttachments = (layer.attachments || []).filter(a => !layerWallsToDelete.has(a.wallId));
         
-        return { ...layer, nodes: newNodes, walls: newWalls, openings: newOpenings };
+        return { ...layer, nodes: newNodes, walls: newWalls, openings: newOpenings, attachments: newAttachments };
     });
 
     return {
@@ -383,6 +393,55 @@ export const useStore = create((set) => ({
     });
   },
 
+  addAttachment: (wallId, type) => {
+    const id = crypto.randomUUID();
+    set((state) => {
+      const targetLayer = state.layers.find(l => l.walls.some(w => w.id === wallId));
+      if (!targetLayer) return state;
+
+      const newAttachment = {
+        id,
+        wallId,
+        type, // 'stairs' | 'counter'
+        dist: 0.5,
+        side: 'left', // 'left' | 'right'
+        // Default dimensions based on type
+        width: type === 'stairs' ? 2.0 : 0.6, // Width perp to wall (depth)
+        length: type === 'stairs' ? 3.5 : 2.0, // Length along wall
+        height: type === 'stairs' ? targetLayer.height : 0.9,
+        elevation: 0,
+        riseDir: 'asc' // 'asc' | 'desc'
+      };
+
+      return {
+        layers: state.layers.map(l => l.id === targetLayer.id ? {
+          ...l,
+          attachments: [...(l.attachments || []), newAttachment]
+        } : l)
+      };
+    });
+  },
+
+  updateAttachment: (id, updates) => set((state) => {
+    // Find layer
+    const layer = state.layers.find(l => l.attachments && l.attachments.some(a => a.id === id));
+    if (!layer) return state;
+
+    return {
+      layers: state.layers.map(l => l.id === layer.id ? {
+        ...l,
+        attachments: l.attachments.map(a => a.id === id ? { ...a, ...updates } : a)
+      } : l)
+    };
+  }),
+
+  deleteAttachment: (id) => set((state) => ({
+    layers: state.layers.map(l => ({
+      ...l,
+      attachments: (l.attachments || []).filter(a => a.id !== id)
+    }))
+  })),
+
   toggleOpeningStatus: (wallId) => set((state) => {
     const targetLayer = state.layers.find(l => l.walls.some(w => w.id === wallId));
     if (!targetLayer) return state;
@@ -470,7 +529,8 @@ export const useStore = create((set) => ({
       height: 2.5, 
       nodes: data.nodes || [], 
       walls: data.walls || [], 
-      openings: data.openings || [] 
+      openings: data.openings || [],
+      attachments: data.attachments || []
     }],
     activeLayerId: data.activeLayerId || DEFAULT_LAYER_ID,
     viewState: data.viewState || { x: 0, y: 0, zoom: 1 },
@@ -500,7 +560,8 @@ export const useStore = create((set) => ({
       height: 2.5,
       nodes: [],
       walls: [],
-      openings: []
+      openings: [],
+      attachments: []
     }],
     activeLayerId: DEFAULT_LAYER_ID,
     viewState: { x: 0, y: 0, zoom: 1 },
